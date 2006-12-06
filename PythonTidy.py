@@ -104,7 +104,11 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.4'  # 2006 Dec 01
+VERSION = '1.5'  # 2006 Dec 05
+
+# 2006 Dec 05 . v1.5 . ccr . Strings default to single quotes when
+# DOUBLE_QUOTED_STRINGS = False.  Pass the newline convention from
+# input to output (transparently :-) ).
 
 # 2006 Dec 01 . v1.4 . ccr . Tighten qualifications for in-line
 # comments.  Decode string nodes.  Enclose docstrings in double
@@ -153,7 +157,9 @@ MAX_SEPS_BEFORE_SPLIT_LINE = 8
 MAX_LINES_BEFORE_SPLIT_LIT = 2
 LEFT_MARGIN = NULL
 LEFTJUST_DOC_STRINGS = False
+DOUBLE_QUOTED_STRINGS = False  # 2006 Dec 05
 RECODE_STRINGS = False  # 2006 Dec 01
+OVERRIDE_NEWLINE = None  # 2006 Dec 05
 
 # Repertoire of name-transformation functions:
 
@@ -266,6 +272,7 @@ COMMENT_PATTERN = re.compile('#')
 SHEBANG_PATTERN = re.compile('#!')
 CODING_PATTERN = re.compile('coding[=:]\\s*([.\\w\\-_]+)')
 NEW_LINE_PATTERN = re.compile('(?<!\\\\)\\\\n')
+UNIVERSAL_NEW_LINE_PATTERN = re.compile(r'((?:\r\n)|(?:\r)|(?:\n))')
 QUOTE_PATTERN = re.compile(r'([rRuU]{,2})(["%s])((?:%s)|(?:\\%s)|)' % (APOST, APOST, APOST))
 ELIDE_C_PATTERN = re.compile('^c([A-Z])')
 ELIDE_A_PATTERN = re.compile('^a([A-Z])')
@@ -315,31 +322,60 @@ class InputUnit(object):
         if len(sys.argv) > 1:
             self.fn = sys.argv[1]
         if self.fn == '-':
-            self.raw = StringIO.StringIO(sys.stdin.read())
+            buffer = sys.stdin.read()  # 2006 Dec 05
         else:
-            unit = open(self.fn,'rb')
-            self.raw = StringIO.StringIO(unit.read())
+            unit = open(os.path.expanduser(self.fn), 'rb')
+            buffer = unit.read()  # 2006 Dec 05
             unit.close()
-        look_ahead = self.raw.readline()
-        look_ahead += self.raw.readline()
+        self.lines = UNIVERSAL_NEW_LINE_PATTERN.split(buffer)  # 2006 Dec 05
+        if len(self.lines) > 2:
+            if OVERRIDE_NEWLINE is None:
+                self.newline = self.lines[1]  # ... the first delimiter.
+            else:
+                self.newline = OVERRIDE_NEWLINE
+            look_ahead = '\n'.join([self.lines[ZERO],self.lines[2]])
+        else:
+            self.newline = '\n'
+            look_ahead = NULL
         match = CODING_PATTERN.search(look_ahead)
         if match is None:
             self.coding = 'ascii'
         else:
             self.coding = match.group(1)
-        self.rewind()
-        return 
+        self.rewind()  # 2006 Dec 05
+        return
 
-    def readline(self):
-        return self.decode(self.raw.readline())
-
-    def rewind(self):
-        self.raw.seek(ZERO)
+    def rewind(self):  # 2006 Dec 05
+        self.ndx = ZERO
+        self.end = len(self.lines) - 1
         return self
 
-    def __str__(self):
+    def next(self):  # 2006 Dec 05
+        if self.ndx > self.end:
+            raise StopIteration
+        elif self.ndx == self.end:
+            result = self.lines[self.ndx]
+        else:
+            result = self.lines[self.ndx] + '\n'
+        self.ndx += 2
+        return result
+
+    def __iter__(self):  # 2006 Dec 05
+        return self
+
+    def readline(self):  # 2006 Dec 05
+        try:
+            result = self.next()
+        except StopIteration:
+            result = NULL
+        return result
+
+    def readlines(self):  # 2006 Dec 05
         self.rewind()
-        return self.decode(self.raw.getvalue())
+        return [line for line in self]
+
+    def __str__(self):  # 2006 Dec 05
+        return NULL.join(self.readlines())
 
     def decode(self, str):
         return str  # It will not do to feed Unicode to *compiler.parse*.
@@ -362,9 +398,10 @@ class OutputUnit(object):
         if self.fn == '-':
             self.unit = sys.stdout = codecs.getwriter(CODING)(sys.stdout)
         else:
-            self.unit = codecs.open(self.fn,'wb',CODING)
+            self.unit = codecs.open(os.path.expanduser(self.fn), 'wb', CODING)
         self.blank_line_count = 1
         self.margin = LEFT_MARGIN
+        self.newline = INPUT.newline  # 2006 Dec 05
         return
 
     def close(self):  # 2006 Dec 01
@@ -419,16 +456,16 @@ class OutputUnit(object):
                 self.tab_clear()
             can_split_before = can_split_after
             can_break_before = can_break_after
-        self.unit.write('\n')
+        self.unit.write(self.newline)  # 2006 Dec 05
         return self
 
     def line_split(self):
-        self.unit.write('\n')
+        self.unit.write(self.newline)  # 2006 Dec 05
         self.pos = self.tab_forward()
         return self
 
     def line_break(self):
-        self.unit.write('\\\n')
+        self.unit.write('\\%s' % self.newline)
         self.pos = self.tab_forward()
         return self
 
@@ -444,9 +481,9 @@ class OutputUnit(object):
         count -= self.blank_line_count
         while count > ZERO:
             self.unit.write(BLANK_LINE)
+            self.unit.write(self.newline)  # 2006 Dec 05
             if DEBUG:
                 self.unit.write(str(trace))
-            self.unit.write('\n')
             self.blank_line_count += 1
             count -= 1
         return self
@@ -865,7 +902,7 @@ class Node(object):
         return self
 
     def line_term(self, lineno=ZERO):
-        lineno = max(self.get_hi_lineno(), self.get_lineno())  # , lineno)
+        lineno = max(self.get_hi_lineno(), self.get_lineno())  # , lineno)  # 2006 Dec 01 
         COMMENTS.put_inline(lineno)
         return self
 
@@ -968,10 +1005,13 @@ class NodeStr(Node):
             lines = doc.splitlines()
             lines = [line.strip() for line in lines]
             lines.extend([NULL, NULL])
-            margin = '\n%s' % (INDENTATION * self.indent)
+            margin = '%s%s' % (OUTPUT.newline, INDENTATION * self.indent)  # 2006 Dec 05
             doc = margin.join(lines)
         self.line_init(need_blank_line=need_blank_line)  # 2006 Dec 01
-        self.put_multi_line(self.force_double_quote(doc))
+        quoted = self.force_double_quote(doc)
+        lines = NEW_LINE_PATTERN.split(quoted)
+        quoted = OUTPUT.newline.join(lines)  # 2006 Dec 05
+        self.put_multi_line(quoted)
         self.line_term()
         OUTPUT.put_blank_line(5)
         return self
@@ -986,16 +1026,17 @@ class NodeStr(Node):
             lit = QUOTE_PATTERN.sub(prefix + quote, lit, 1)
         else:
             raise ValueError
-        lines = NEW_LINE_PATTERN.split(lit)
-        lit = ('\n').join(lines)
         return lit
 
     def put_lit(self):
         lit = self.get_as_str()
-        lit = repr(lit)
+        if DOUBLE_QUOTED_STRINGS:  # 2006 Dec 05
+            lit = self.force_double_quote(lit)
+        else:
+            lit = repr(lit)
         lines = NEW_LINE_PATTERN.split(lit)
         if len(lines) > MAX_LINES_BEFORE_SPLIT_LIT:
-            lit = ('\n').join(lines)
+            lit = OUTPUT.newline.join(lines)  # 2006 Dec 05
             self.put_multi_line(lit)
         else:
             self.line_more(lit)
