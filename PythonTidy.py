@@ -102,9 +102,12 @@ Collaborative International Dictionary of English v.0.48.
 from __future__ import division
 
 DEBUG = False
-PERSONAL = False
+PERSONAL = True
 
-VERSION = '1.5'  # 2006 Dec 05
+VERSION = '1.6'  # 2006 Dec 13
+
+# 2006 Dec 06 . v1.6 . ccr . A *yield* can appear in parens when it is
+# the subject of an assignment; otherwise, not.
 
 # 2006 Dec 05 . v1.5 . ccr . Strings default to single quotes when
 # DOUBLE_QUOTED_STRINGS = False.  Pass the newline convention from
@@ -306,7 +309,9 @@ SUBSTITUTE_FOR = {
     'check_button': 'CheckButton', 
     'tooltips': 'Tooltips', 
     'dialog': 'Dialog', 
-    'button_press': 'BUTTON_PRESS', 
+    'button_press': 'BUTTON_PRESS',
+    'multiline': 'MULTILINE',
+    'dotall': 'DOTALL',
     }
 
 
@@ -1349,7 +1354,12 @@ class NodeAssign(Node):
         for node in self.nodes:
             node.put(can_split=can_split)
             self.line_more(ASSIGNMENT, can_break_after=True)
-        self.expr.put(can_split=can_split)
+        if isinstance(self.expr, NodeYield):  # 2006 Dec 13
+            self.line_more('(')
+            self.expr.put(can_split=True)
+            self.line_more(')')
+        else:
+            self.expr.put(can_split=can_split)
         self.line_term()
         return self
 
@@ -3691,9 +3701,8 @@ class NodeYield(Node):
         return 
 
     def put(self, can_split=False):
-        self.line_more('(yield ')
-        self.value.put(can_split=True)
-        self.line_more(')')
+        self.line_more('yield ')  # 2006 Dec 13
+        self.value.put(can_split=can_split)
         return self
 
     def get_hi_lineno(self):
