@@ -102,11 +102,14 @@ Collaborative International Dictionary of English v.0.48.
 from __future__ import division
 
 DEBUG = False
-PERSONAL = True
+PERSONAL = False
 
-VERSION = '1.6'  # 2006 Dec 13
+VERSION = '1.7'  # 2006 Dec 14
 
-# 2006 Dec 06 . v1.6 . ccr . A *yield* can appear in parens when it is
+# 2006 Dec 14 . v1.7 . ccr . Track line numbers on output.
+# Write a "Name Substitutions Report" on stderr.
+
+# 2006 Dec 13 . v1.6 . ccr . A *yield* may appear in parens when it is
 # the subject of an assignment; otherwise, not.
 
 # 2006 Dec 05 . v1.5 . ccr . Strings default to single quotes when
@@ -312,6 +315,9 @@ SUBSTITUTE_FOR = {
     'button_press': 'BUTTON_PRESS',
     'multiline': 'MULTILINE',
     'dotall': 'DOTALL',
+    'p_nowait':'P_NOWAIT',
+    'request':'Request',
+    'text_wrapper':'TextWrapper',
     }
 
 
@@ -407,6 +413,7 @@ class OutputUnit(object):
         self.blank_line_count = 1
         self.margin = LEFT_MARGIN
         self.newline = INPUT.newline  # 2006 Dec 05
+        self.lineno = ZERO  # 2006 Dec 14
         return
 
     def close(self):  # 2006 Dec 01
@@ -453,7 +460,7 @@ class OutputUnit(object):
                     self.line_split()
                 elif can_break_before:
                     self.line_break()
-            self.unit.write(chunk)
+            self.put(chunk)  # 2006 Dec 14
             self.pos += len(chunk)
             if tab_set:
                 self.tab_set(self.pos)
@@ -461,16 +468,16 @@ class OutputUnit(object):
                 self.tab_clear()
             can_split_before = can_split_after
             can_break_before = can_break_after
-        self.unit.write(self.newline)  # 2006 Dec 05
+        self.put(self.newline)  # 2006 Dec 05
         return self
 
     def line_split(self):
-        self.unit.write(self.newline)  # 2006 Dec 05
+        self.put(self.newline)  # 2006 Dec 05
         self.pos = self.tab_forward()
         return self
 
     def line_break(self):
-        self.unit.write('\\%s' % self.newline)
+        self.put('\\%s' % self.newline)  # 2006 Dec 14
         self.pos = self.tab_forward()
         return self
 
@@ -479,16 +486,21 @@ class OutputUnit(object):
             col = (self.tab_stack)[1]
         else:
             col = (self.tab_stack)[ZERO]
-        self.unit.write(SPACE * col)
+        self.put(SPACE * col)  # 2006 Dec 14
         return col
+
+    def put(self, text):  # 2006 Dec 14
+        self.lineno += text.count(self.newline)
+        self.unit.write(text)
+        return self
 
     def put_blank_line(self, trace, count=1):
         count -= self.blank_line_count
         while count > ZERO:
-            self.unit.write(BLANK_LINE)
-            self.unit.write(self.newline)  # 2006 Dec 05
+            self.put(BLANK_LINE)  # 2006 Dec 14
+            self.put(self.newline)  # 2006 Dec 05
             if DEBUG:
-                self.unit.write(str(trace))
+                self.put(str(trace))  # 2006 Dec 14
             self.blank_line_count += 1
             count -= 1
         return self
@@ -605,6 +617,50 @@ class Comments(dict):
 COMMENTS = Comments()
 
 
+class Name(list):  # 2006 Dec 14
+
+    """Maps new name to old names.
+
+    """
+
+    def __init__(self, new):
+        self.new = new
+        self.is_reported = False
+        return
+
+    def append(self, item):
+        if item in self:
+            pass
+        else:
+            list.append(self, item)
+        return
+
+    def rept_collision(self):
+        if len(self) == 1:
+            pass
+        elif self.is_reported:
+            pass
+        else:
+            sys.stderr.write("Error:  %s ambiguously replaced by '%s' at line %i.\n" % \
+                             (str(self), self.new, OUTPUT.lineno + 1))
+            self.is_reported = True
+        return self
+
+    def rept_external(self, expr):
+        if isinstance(expr, NodeName):
+            expr = expr.name.str
+        else:
+            expr = str(expr)
+        if expr in ['self','cls']:
+            pass
+        elif self.new == self[ZERO]:
+            pass
+        else:
+            sys.stderr.write("Warning:  '%s.%s,' defined elsewhere, replaced by '.%s' at line %i.\n" % \
+                             (expr, self[ZERO], self.new, OUTPUT.lineno + 1))
+        return self
+
+
 class NameSpace(list):
 
     """Dictionary of names (variables).
@@ -626,7 +682,9 @@ class NameSpace(list):
         key = name
         for rule in rules:
             name = rule(name)
-        self[ZERO][key] = name
+        name = self[ZERO].setdefault(name,Name(name))  # 2006 Dec 14
+        self[ZERO].setdefault(key,name)
+        name.append(key)
         return name
 
     def make_local_name(self, name):
@@ -651,23 +709,33 @@ class NameSpace(list):
     def make_imported_name(self, name):
         return self.make_name(name, [])
 
-    def make_attr_name(self, name):
+    def make_attr_name(self, expr, name):
         name = name.get_as_str()
+        key = name
         for rule in ATTR_NAME_SCRIPT:
             name = rule(name)
-        return name
+        name = Name(name)  # 2006 Dec 14
+        name.append(key)
+        name.rept_external(expr)
+        return name.new
 
     def make_keyword_name(self, name):
         name = name.get_as_str()
+        key = name
         for rule in FORMAL_PARAM_NAME_SCRIPT:
             name = rule(name)
-        return name
+        name = Name(name)  # 2006 Dec 14
+        name.append(key)
+        return name.new
 
     def get_name(self, node):
         name = node.get_as_str()
         for scope in self:
             if name in scope:
-                return scope[name]
+                name = scope[name]
+                name.rept_collision()  # 2006 Dec 14
+                name = name.new
+                break
         return name
 
     def has_name(self, node):
@@ -1156,7 +1224,7 @@ class NodeAsgAttr(NodeOpr):
         else:
             self.put_expr(self.expr, can_split=can_split)
         self.line_more('.')
-        self.line_more(NAME_SPACE.make_attr_name(self.attrname))
+        self.line_more(NAME_SPACE.make_attr_name(self.expr, self.attrname))
         if DEBUG:
             self.line_more(' /* AsgAttr flags:  ')
             self.flags.put()
@@ -2433,7 +2501,7 @@ class NodeGetAttr(NodeOpr):
         else:
             self.put_expr(self.expr, can_split=can_split)
         self.line_more('.')
-        self.line_more(NAME_SPACE.make_attr_name(self.attrname))
+        self.line_more(NAME_SPACE.make_attr_name(self.expr, self.attrname))
         return self
 
     def get_hi_lineno(self):
