@@ -104,7 +104,11 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.7'  # 2006 Dec 14
+VERSION = '1.8'  # 2006 Dec 17
+
+# 2006 Dec 17 . v1.8 . ccr . Trailing comma in function parameter list
+# is not allowed in all cases.  Catch substitutions that collide with
+# built-ins.
 
 # 2006 Dec 14 . v1.7 . ccr . Track line numbers on output.
 # Write a "Name Substitutions Report" on stderr.
@@ -284,40 +288,192 @@ ELIDE_C_PATTERN = re.compile('^c([A-Z])')
 ELIDE_A_PATTERN = re.compile('^a([A-Z])')
 ELIDE_F_PATTERN = re.compile('^f([A-Z])')
 SUBSTITUTE_FOR = {
-    'dict_writer': 'DictWriter', 
+    'abday_1':'ABDAY_1',
+    'abday_2':'ABDAY_2',
+    'abday_3':'ABDAY_3',
+    'abday_4':'ABDAY_4',
+    'abday_5':'ABDAY_5',
+    'abday_6':'ABDAY_6',
+    'abday_7':'ABDAY_7',
+    'abmon_1':'ABMON_1',
+    'abmon_10':'ABMON_10',
+    'abmon_11':'ABMON_11',
+    'abmon_12':'ABMON_12',
+    'abmon_2':'ABMON_2',
+    'abmon_3':'ABMON_3',
+    'abmon_4':'ABMON_4',
+    'abmon_5':'ABMON_5',
+    'abmon_6':'ABMON_6',
+    'abmon_7':'ABMON_7',
+    'abmon_8':'ABMON_8',
+    'abmon_9':'ABMON_9',
+    'accel_group': 'AccelGroup',
+    'action_default': 'ACTION_DEFAULT',
+    'action_copy': 'ACTION_COPY',
+    'align_left': 'ALIGN_LEFT',
+    'align_right': 'ALIGN_RIGHT',
+    'align_center': 'ALIGN_CENTER',
+    'alignment': 'Alignment',
+    'button': 'Button',
+    'button_press': 'BUTTON_PRESS',
+    'button_press_mask': 'BUTTON_PRESS_MASK',
+    'buttons_cancel': 'BUTTONS_CANCEL', 
+    'can_default': 'CAN_DEFAULT',
+    'can_focus': 'CAN_FOCUS',
+    'cell_renderer_pixbuf': 'CellRendererPixbuf',
+    'cell_renderer_text': 'CellRendererText',
+    'check_button': 'CheckButton',
+    'child_nodes': 'childNodes',
+    'color': 'Color',
+    'combo': 'Combo',
+    'config_parser': 'ConfigParser',
+    'cursor': 'Cursor',
+    'day_1':'DAY_1',
+    'day_2':'DAY_2',
+    'day_3':'DAY_3',
+    'day_4':'DAY_4',
+    'day_5':'DAY_5',
+    'day_6':'DAY_6',
+    'day_7':'DAY_7',
+    'dest_default_all': 'DEST_DEFAULT_ALL',
+    'dialog': 'Dialog', 
+    'dialog_modal': 'DIALOG_MODAL', 
     'dict_reader': 'DictReader', 
-    'dotall': 'DOTALL', 
-    'string_io': 'StringIO', 
-    'ftp': 'FTP', 
+    'dict_writer': 'DictWriter', 
+    'dir_tab_forward': 'DIR_TAB_FORWARD',
+    'dotall': 'DOTALL',
+    'dotall': 'DOTALL',
+    'enter_notify_mask': 'ENTER_NOTIFY_MASK',
+    'entry': 'Entry',
+    'error': 'Error',
+    'event_box': 'EventBox', 
+    'expand': 'EXPAND',
+    'exposure_mask': 'EXPOSURE_MASK',
+    'file_selection': 'FileSelection',
+    'fill': 'FILL',
+    'ftp': 'FTP',
+    'get_attribute': 'getAttribute',
+    'hand2': 'HAND2',
+    'hbox': 'HBox', 
+    'icon_size_button': 'ICON_SIZE_BUTTON', 
+    'icon_size_dialog': 'ICON_SIZE_DIALOG',
+    'icon_size_dnd': 'ICON_SIZE_DND',
+    'icon_size_large_toolbar': 'ICON_SIZE_LARGE_TOOLBAR',
+    'icon_size_menu': 'ICON_SIZE_MENU',
+    'icon_size_small_toolbar': 'ICON_SIZE_SMALL_TOOLBAR',
+    'image': 'Image',
+    'image_menu_item': 'ImageMenuItem',
+    'item_factory': 'ItemFactory',
+    'justify_center': 'JUSTIFY_CENTER',
+    'justify_fill': 'JUSTIFY_FILL',
+    'justify_left': 'JUSTIFY_LEFT',
+    'justify_right': 'JUSTIFY_RIGHT',
+    'label': 'Label', 
+    'list_item': 'ListItem',
+    'list_store': 'ListStore',
+    'menu': 'Menu',
+    'menu_bar': 'MenuBar',
+    'message_dialog': 'MessageDialog', 
+    'message_info': 'MESSAGE_INFO', 
+    'mon_1':'MON_1',
+    'mon_10':'MON_10',
+    'mon_11':'MON_11',
+    'mon_12':'MON_12',
+    'mon_2':'MON_2',
+    'mon_3':'MON_3',
+    'mon_4':'MON_4',
+    'mon_5':'MON_5',
+    'mon_6':'MON_6',
+    'mon_7':'MON_7',
+    'mon_8':'MON_8',
+    'mon_9':'MON_9',
+    'multiline': 'MULTILINE',
+    'node_type': 'nodeType',
+    'notebook': 'Notebook',
+    'o_creat': 'O_CREAT', 
+    'o_excl': 'O_EXCL',
+    'o_ndelay': 'O_NDELAY',
+    'o_rdwr': 'O_RDWR', 
+    'p_nowait':'P_NOWAIT',
+    'parsing_error': 'ParsingError',
+    'pixmap': 'Pixmap',
+    'pointer_motion_mask': 'POINTER_MOTION_MASK',
+    'pointer_motion_hint_mask': 'POINTER_MOTION_HINT_MASK',
+    'policy_automatic': 'POLICY_AUTOMATIC',
+    'policy_never': 'POLICY_NEVER',
+    'radio_button': 'RadioButton',
+    'realized': 'REALIZED',
+    'relief_none': 'RELIEF_NONE',
+    'request':'Request',
+    'response_cancel': 'RESPONSE_CANCEL', 
+    'response_delete_event': 'RESPONSE_DELETE_EVENT',
+    'response_no': 'RESPONSE_NO',
+    'response_none': 'RESPONSE_NONE',
+    'response_ok': 'RESPONSE_OK', 
+    'response_yes': 'RESPONSE_YES',
+    'scrolled_window': 'ScrolledWindow',
+    'shadow_in': 'SHADOW_IN',
+    'sniffer': 'Sniffer', 
+    'sort_ascending': 'SORT_ASCENDING',
+    'sort_descending': 'SORT_DESCENDING',
+    'state_normal': 'STATE_NORMAL',
+    'stock_add': 'STOCK_ADD',
+    'stock_apply': 'STOCK_APPLY', 
+    'stock_bold': 'STOCK_BOLD',
+    'stock_cancel': 'STOCK_CANCEL',
+    'stock_close': 'STOCK_CLOSE',
+    'stock_convert': 'STOCK_CONVERT',
+    'stock_copy': 'STOCK_COPY',
+    'stock_cut': 'STOCK_CUT',
+    'stock_dialog_info': 'STOCK_DIALOG_INFO',
+    'stock_dialog_info': 'STOCK_DIALOG_INFO',
+    'stock_dialog_question': 'STOCK_DIALOG_QUESTION',
+    'stock_execute': 'STOCK_EXECUTE', 
+    'stock_find': 'STOCK_FIND',
+    'stock_find_and_replace': 'STOCK_FIND_AND_REPLACE',
+    'stock_go_back': 'STOCK_GO_BACK',
+    'stock_go_forward': 'STOCK_GO_FORWARD',
+    'stock_help': 'STOCK_HELP',
+    'stock_index': 'STOCK_INDEX',
+    'stock_jump_to': 'STOCK_JUMP_TO',
+    'stock_new': 'STOCK_NEW',
+    'stock_no': 'STOCK_NO',
+    'stock_ok': 'STOCK_OK',
+    'stock_open': 'STOCK_OPEN',
+    'stock_paste': 'STOCK_PASTE',
+    'stock_preferences': 'STOCK_PREFERENCES',
+    'stock_print_preview': 'STOCK_PRINT_PREVIEW',
+    'stock_quit': 'STOCK_QUIT',
+    'stock_refresh': 'STOCK_REFRESH',
+    'stock_remove': 'STOCK_REMOVE',
+    'stock_save': 'STOCK_SAVE',
+    'stock_save_as': 'STOCK_SAVE_AS',
+    'stock_yes': 'STOCK_YES',
+    'string_io': 'StringIO',
+    'style_italic': 'STYLE_ITALIC',
+    'sunday': 'SUNDAY',
+    'tab_array': 'TabArray',
+    'tab_left': 'TAB_LEFT',
+    'table': 'Table',
+    'target_same_app': 'TARGET_SAME_APP',
+    'target_same_widget': 'TARGET_SAME_WIDGET',
+    'text_iter': 'TextIter',
+    'text_node': 'TEXT_NODE',
+    'text_tag': 'TextTag',
+    'text_view': 'TextView',
+    'text_window_text': 'TEXT_WINDOW_TEXT',
+    'text_window_widget': 'TEXT_WINDOW_WIDGET',
+    'text_wrapper':'TextWrapper',
+    'tooltips': 'Tooltips', 
+    'tree_view': 'TreeView',
+    'tree_view_column': 'TreeViewColumn',
+    'type_string': 'TYPE_STRING',
+    'underline_single': 'UNDERLINE_SINGLE',
+    'weight_bold': 'WEIGHT_BOLD',
     'window': 'Window', 
     'window_toplevel': 'WINDOW_TOPLEVEL', 
-    'o_creat': 'O_CREAT', 
-    'o_excl': 'O_EXCL', 
-    'o_rdwr': 'O_RDWR', 
-    'stock_apply': 'STOCK_APPLY', 
-    'stock_cancel': 'STOCK_CANCEL', 
-    'stock_ok': 'STOCK_OK', 
-    'response_cancel': 'RESPONSE_CANCEL', 
-    'response_ok': 'RESPONSE_OK', 
-    'stock_execute': 'STOCK_EXECUTE', 
-    'icon_size_button': 'ICON_SIZE_BUTTON', 
-    'label': 'Label', 
-    'hbox': 'HBox', 
-    'event_box': 'EventBox', 
-    'message_dialog': 'MessageDialog', 
-    'dialog_modal': 'DIALOG_MODAL', 
-    'message_info': 'MESSAGE_INFO', 
-    'buttons_cancel': 'BUTTONS_CANCEL', 
-    'entry': 'Entry', 
-    'check_button': 'CheckButton', 
-    'tooltips': 'Tooltips', 
-    'dialog': 'Dialog', 
-    'button_press': 'BUTTON_PRESS',
-    'multiline': 'MULTILINE',
-    'dotall': 'DOTALL',
-    'p_nowait':'P_NOWAIT',
-    'request':'Request',
-    'text_wrapper':'TextWrapper',
+    'wrap_none': 'WRAP_NONE',
+    'wrap_word': 'WRAP_WORD',
     }
 
 
@@ -635,7 +791,8 @@ class Name(list):  # 2006 Dec 14
             list.append(self, item)
         return
 
-    def rept_collision(self):
+    def rept_collision(self, key):
+        self.append(key)  # 2006 Dec 17
         if len(self) == 1:
             pass
         elif self.is_reported:
@@ -729,11 +886,11 @@ class NameSpace(list):
         return name.new
 
     def get_name(self, node):
-        name = node.get_as_str()
+        name = key = node.get_as_str()  # 2006 Dec 17
         for scope in self:
-            if name in scope:
-                name = scope[name]
-                name.rept_collision()  # 2006 Dec 14
+            if key in scope:
+                name = scope[key]
+                name.rept_collision(key)  # 2006 Dec 14
                 name = name.new
                 break
         return name
@@ -2266,10 +2423,16 @@ class NodeFunction(Node):
         if len(parms) > MAX_SEPS_BEFORE_SPLIT_LINE:
             self.line_term()
             self.inc_margin()
-            for (arg, default, stars) in parms:
+            for (arg, default, stars) in parms[:-1]:
                 self.line_init()
                 self.put_parm(arg, default, stars)
                 self.line_more(FUNCTION_PARAM_SEP)
+                self.line_term()
+            for (arg, default, stars) in parms[-1:]:
+                self.line_init()
+                self.put_parm(arg, default, stars)
+                if stars is None:  # 2006 Dec 17
+                    self.line_more(FUNCTION_PARAM_SEP)
                 self.line_term()
             self.line_init()
             self.dec_margin()
