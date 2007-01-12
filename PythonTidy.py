@@ -29,7 +29,7 @@ USA.
 ===========================================
 Charles Curtis Rhode,
 1518 N 3rd, Sheboygan, WI 53081
-mailto:CRhode@LacusVeris?subject=PythonTidy
+mailto:CRhode@LacusVeris.com?subject=PythonTidy
 ===========================================
 
 This script reads Python code from standard input and writes a revised
@@ -104,7 +104,11 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.8'  # 2006 Dec 17
+VERSION = '1.9'  # 2006 Dec 19
+
+# 2006 Dec 19 . v1.9 . ccr . If class name is a string, pass it to
+# personal substitutions routine to distinguish module globals like
+# gtk.VBox from class attributes like gtk.Dialog.vbox.
 
 # 2006 Dec 17 . v1.8 . ccr . Trailing comma in function parameter list
 # is not allowed in all cases.  Catch substitutions that collide with
@@ -173,16 +177,23 @@ OVERRIDE_NEWLINE = None  # 2006 Dec 05
 
 # Repertoire of name-transformation functions:
 
-ALL_LOWER_CASE = str.lower
-ALL_UPPER_CASE = str.upper
-TITLE_CASE = str.title
+def all_lower_case(str, **attribs):
+    return str.lower()
 
 
-def strip_underscores(str):
+def all_upper_case(str, **attribs):
+    return str.upper()
+
+
+def title_case(str, **attribs):
+    return str.title()
+
+
+def strip_underscores(str, **attribs):
     return str.replace('_', NULL)
 
 
-def insert_underscores(str):
+def insert_underscores(str, **attribs):
     return UNDERSCORE_PATTERN.sub('_\\1', str)
 
 
@@ -190,27 +201,27 @@ def is_magic(str):
     return str in ['self', 'cls'] or str.startswith('__') and str.endswith('__')
 
 
-def underscore_to_camel_case(str):
+def underscore_to_camel_case(str, **attribs):
     if is_magic(str):
         return str
     else:
-        return strip_underscores(TITLE_CASE(camel_case_to_underscore(str)))
+        return strip_underscores(title_case(camel_case_to_underscore(str)))
 
 
-def camel_case_to_underscore(str):
+def camel_case_to_underscore(str, **attribs):
     if is_magic(str):
         return str
     else:
-        return ALL_LOWER_CASE(insert_underscores(str))
+        return all_lower_case(insert_underscores(str))
 
 
-def unmangle(str):
+def unmangle(str, **attribs):
     if str.startswith('__'):
         str = str[2:]
     return str
 
 
-def munge(str):
+def munge(str, **attribs):
     """Create an unparsable name.
 
     """
@@ -218,19 +229,25 @@ def munge(str):
     return '<*%s*>' % str
 
 
-def substitutions(str):
-    return SUBSTITUTE_FOR.get(str, str)
+def substitutions(str, **attribs):
+    result = SUBSTITUTE_FOR.get(str, str)
+    module = attribs.get('module')  # 2006 Dec 19
+    if module is None:
+        pass
+    else:
+        result = SUBSTITUTE_FOR.get('%s.%s' % (module, str), result)
+    return result
 
 
-def elide_c(str):
+def elide_c(str, **attribs):
     return ELIDE_C_PATTERN.sub('\\1', str)
 
 
-def elide_a(str):
+def elide_a(str, **attribs):
     return ELIDE_A_PATTERN.sub('\\1', str)
 
 
-def elide_f(str):
+def elide_f(str, **attribs):
     return ELIDE_F_PATTERN.sub('\\1', str)
 
 
@@ -268,7 +285,7 @@ if PERSONAL:
     LEFTJUST_DOC_STRINGS = True
     LOCAL_NAME_SCRIPT.extend([unmangle, camel_case_to_underscore])
     GLOBAL_NAME_SCRIPT.extend([unmangle, camel_case_to_underscore, 
-                              ALL_UPPER_CASE])
+                              all_upper_case])
     CLASS_NAME_SCRIPT.extend([elide_c, underscore_to_camel_case])
     FUNCTION_NAME_SCRIPT.extend([camel_case_to_underscore])
     FORMAL_PARAM_NAME_SCRIPT.extend([elide_a, camel_case_to_underscore])
@@ -314,7 +331,6 @@ SUBSTITUTE_FOR = {
     'align_right': 'ALIGN_RIGHT',
     'align_center': 'ALIGN_CENTER',
     'alignment': 'Alignment',
-    'button': 'Button',
     'button_press': 'BUTTON_PRESS',
     'button_press_mask': 'BUTTON_PRESS_MASK',
     'buttons_cancel': 'BUTTONS_CANCEL', 
@@ -325,7 +341,6 @@ SUBSTITUTE_FOR = {
     'check_button': 'CheckButton',
     'child_nodes': 'childNodes',
     'color': 'Color',
-    'combo': 'Combo',
     'config_parser': 'ConfigParser',
     'cursor': 'Cursor',
     'day_1':'DAY_1',
@@ -336,7 +351,6 @@ SUBSTITUTE_FOR = {
     'day_6':'DAY_6',
     'day_7':'DAY_7',
     'dest_default_all': 'DEST_DEFAULT_ALL',
-    'dialog': 'Dialog', 
     'dialog_modal': 'DIALOG_MODAL', 
     'dict_reader': 'DictReader', 
     'dict_writer': 'DictWriter', 
@@ -344,7 +358,6 @@ SUBSTITUTE_FOR = {
     'dotall': 'DOTALL',
     'dotall': 'DOTALL',
     'enter_notify_mask': 'ENTER_NOTIFY_MASK',
-    'entry': 'Entry',
     'error': 'Error',
     'event_box': 'EventBox', 
     'expand': 'EXPAND',
@@ -353,6 +366,18 @@ SUBSTITUTE_FOR = {
     'fill': 'FILL',
     'ftp': 'FTP',
     'get_attribute': 'getAttribute',
+    'gtk.button': 'Button',
+    'gtk.combo': 'Combo',
+    'gtk.dialog': 'Dialog',
+    'gtk.entry': 'Entry',
+    'pixmap': 'Pixmap',
+    'gtk.image': 'Image',
+    'gtk.label': 'Label',
+    'gtk.menu': 'Menu',
+    'gtk.pack_end': 'PACK_END',
+    'gtk.pack_start': 'PACK_START',
+    'gtk.vbox': 'VBox',
+    'gtk.window': 'Window',
     'hand2': 'HAND2',
     'hbox': 'HBox', 
     'icon_size_button': 'ICON_SIZE_BUTTON', 
@@ -361,17 +386,14 @@ SUBSTITUTE_FOR = {
     'icon_size_large_toolbar': 'ICON_SIZE_LARGE_TOOLBAR',
     'icon_size_menu': 'ICON_SIZE_MENU',
     'icon_size_small_toolbar': 'ICON_SIZE_SMALL_TOOLBAR',
-    'image': 'Image',
     'image_menu_item': 'ImageMenuItem',
     'item_factory': 'ItemFactory',
     'justify_center': 'JUSTIFY_CENTER',
     'justify_fill': 'JUSTIFY_FILL',
     'justify_left': 'JUSTIFY_LEFT',
     'justify_right': 'JUSTIFY_RIGHT',
-    'label': 'Label', 
     'list_item': 'ListItem',
     'list_store': 'ListStore',
-    'menu': 'Menu',
     'menu_bar': 'MenuBar',
     'message_dialog': 'MessageDialog', 
     'message_info': 'MESSAGE_INFO', 
@@ -396,7 +418,6 @@ SUBSTITUTE_FOR = {
     'o_rdwr': 'O_RDWR', 
     'p_nowait':'P_NOWAIT',
     'parsing_error': 'ParsingError',
-    'pixmap': 'Pixmap',
     'pointer_motion_mask': 'POINTER_MOTION_MASK',
     'pointer_motion_hint_mask': 'POINTER_MOTION_HINT_MASK',
     'policy_automatic': 'POLICY_AUTOMATIC',
@@ -452,6 +473,7 @@ SUBSTITUTE_FOR = {
     'string_io': 'StringIO',
     'style_italic': 'STYLE_ITALIC',
     'sunday': 'SUNDAY',
+    'tab': 'Tab',
     'tab_array': 'TabArray',
     'tab_left': 'TAB_LEFT',
     'table': 'Table',
@@ -470,7 +492,6 @@ SUBSTITUTE_FOR = {
     'type_string': 'TYPE_STRING',
     'underline_single': 'UNDERLINE_SINGLE',
     'weight_bold': 'WEIGHT_BOLD',
-    'window': 'Window', 
     'window_toplevel': 'WINDOW_TOPLEVEL', 
     'wrap_none': 'WRAP_NONE',
     'wrap_word': 'WRAP_WORD',
@@ -867,10 +888,14 @@ class NameSpace(list):
         return self.make_name(name, [])
 
     def make_attr_name(self, expr, name):
+        if isinstance(expr, NodeName):  # 2006 Dec 19
+            module = expr.name.str
+        else:
+            module = None
         name = name.get_as_str()
         key = name
         for rule in ATTR_NAME_SCRIPT:
-            name = rule(name)
+            name = rule(name, module=module)  # 2006 Dec 19
         name = Name(name)  # 2006 Dec 14
         name.append(key)
         name.rept_external(expr)
