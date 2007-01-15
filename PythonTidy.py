@@ -60,12 +60,6 @@ works to begin with.  It doesn\'t check.  If all goes well, the output
 Python code will work, too.  Of course, you are advised to test it
 fully to be sure.
 
-If it means anything to you, know then that this script mangles
-literals, converting them to a canonical form, e.g., hex integers are
-converted to decimal and raw strings are converted to escaped strings.
-This negatively impacts code readability, but the price paid for
-piggybacking on the standard parser must be borne.
-
 This script should be run only by python.2.5 (and perhaps higher) on
 scripts written for that version (and perhaps lower) because of its
 limited knowledge of and expectations for the abstract syntax tree
@@ -104,7 +98,20 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.9'  # 2006 Dec 19
+VERSION = '1.10'  # 2007 Jan 14
+
+# 2007 Jan 14 . v1.10 . ccr . There was a big problem with earlier
+# versions: Canonical values were substituted for strings and numbers.
+# For example, decimal integers were substituted for hexadecimal, and
+# escaped strings for raw strings.  Authors of Python scripts usually
+# use peculiar notations for peculiar purposes, and doing away with
+# them negatively impacts the readability of the code.
+
+# This version preserves the original constants (parsed by *tokenize*)
+# in a literal pool indexed by the value they evaluate to.  The
+# canonical values (output by *compiler*) are then translated back
+# (when possible) to the original constants by looking them up in the
+# literal pool.
 
 # 2006 Dec 19 . v1.9 . ccr . If class name is a string, pass it to
 # personal substitutions routine to distinguish module globals like
@@ -300,7 +307,8 @@ SHEBANG_PATTERN = re.compile('#!')
 CODING_PATTERN = re.compile('coding[=:]\\s*([.\\w\\-_]+)')
 NEW_LINE_PATTERN = re.compile('(?<!\\\\)\\\\n')
 UNIVERSAL_NEW_LINE_PATTERN = re.compile(r'((?:\r\n)|(?:\r)|(?:\n))')
-QUOTE_PATTERN = re.compile(r'([rRuU]{,2})(["%s])((?:%s)|(?:\\%s)|)' % (APOST, APOST, APOST))
+QUOTE_PATTERN = re.compile(r'([rRuU]{,2})((?:""")|(?:%s)|(?:")|(?:%s))((?:%s)|(?:\\%s)|)' \
+                           % (APOST * 3, APOST, APOST, APOST))  # 2006 Jan 14
 ELIDE_C_PATTERN = re.compile('^c([A-Z])')
 ELIDE_A_PATTERN = re.compile('^a([A-Z])')
 ELIDE_F_PATTERN = re.compile('^f([A-Z])')
@@ -715,6 +723,7 @@ class Comments(dict):
     """
 
     def __init__(self):
+        self.literal_pool = {}  # 2007 Jan 14
         lines = tokenize.generate_tokens(INPUT.readline)
         for (token_type, token_string, start, end, line) in lines:
             if DEBUG:
@@ -733,6 +742,17 @@ class Comments(dict):
                     token_string = COMMENT_PATTERN.sub(COMMENT_PREFIX, 
                             token_string, 1)
                     self[self.max_lineno] = [scol, token_string]
+            elif token_type in [tokenize.NUMBER, tokenize.STRING]:  # 2007 Jan 14
+                try:
+                    token_string = token_string.strip().decode(INPUT.coding, 'backslashreplace')
+                    canonical_value = repr(eval(token_string))
+                    if canonical_value == token_string:
+                        pass
+                    else:
+                        original_values = self.literal_pool.setdefault(canonical_value, [])
+                        original_values.append([token_string, self.max_lineno])
+                except:
+                    pass
         self.prev_lineno = NA
         self[self.prev_lineno] = (ZERO, SHEBANG)
         self[ZERO] = (ZERO, CODING_SPEC)
@@ -1276,19 +1296,29 @@ class NodeStr(Node):
         match = QUOTE_PATTERN.match(lit)
         (prefix, quote, apost) = match.group(1, 2, 3)
         if (quote, apost) == ("'", "\\'"):
-            lit = QUOTE_PATTERN.sub(prefix + quote, lit, 1)
+            pass
+        elif (quote, apost) == ("'''", "\\'"):  # 2007 Jan 14
+            pass
         elif (quote, apost) == ('"', "'"):
-            lit = QUOTE_PATTERN.sub(prefix + quote, lit, 1)
+            pass
+        elif (quote, apost) == ('"""', "'"):  # 2007 Jan 14
+            pass
         else:
-            raise ValueError
+            raise NotImplementedError
+        lit = QUOTE_PATTERN.sub(prefix + quote, lit, 1)
         return lit
 
     def put_lit(self):
         lit = self.get_as_str()
-        if DOUBLE_QUOTED_STRINGS:  # 2006 Dec 05
-            lit = self.force_double_quote(lit)
+        result = repr(lit)
+        original_values = COMMENTS.literal_pool.get(result, [])  # 2007 Jan 14
+        if len(original_values) == 1:
+            (lit, lineno) = original_values[ZERO]
         else:
-            lit = repr(lit)
+            if DOUBLE_QUOTED_STRINGS:  # 2006 Dec 05
+                lit = self.force_double_quote(lit)
+            else:
+                lit = result
         lines = NEW_LINE_PATTERN.split(lit)
         if len(lines) > MAX_LINES_BEFORE_SPLIT_LIT:
             lit = OUTPUT.newline.join(lines)  # 2006 Dec 05
@@ -1300,8 +1330,12 @@ class NodeStr(Node):
     def put_multi_line(self, lit):  # 2006 Dec 01
         match = QUOTE_PATTERN.match(lit)
         (prefix, quote, apost) = match.group(1, 2, 3)
-        head = prefix + quote * 3 + apost
-        tail = quote * 2
+        if len(quote) == 3:  # 2006 Jan 14
+            head = prefix + quote + apost
+            tail = NULL
+        else:
+            head = prefix + quote * 3 + apost
+            tail = quote * 2
         lit = QUOTE_PATTERN.sub(head, lit, 1) + tail
         self.line_more(lit)
         return self
@@ -1325,7 +1359,11 @@ class NodeInt(Node):
         return self
 
     def get_as_repr(self):
-        return repr(self.int)
+        result = repr(self.int)
+        original_values = COMMENTS.literal_pool.get(result, [])  # 2006 Jan 14
+        if len(original_values) == 1:
+            (result, lineno) = original_values[ZERO]
+        return result
 
 
 class NodeAdd(NodeOpr):
@@ -1997,7 +2035,11 @@ class NodeConst(Node):
         elif isinstance(self.value, Node):
             self.value.put(can_split=can_split)
         else:
-            self.line_more(repr(self.value))
+            result = repr(self.value)
+            original_values = COMMENTS.literal_pool.get(result, [])  # 2006 Jan 14
+            if len(original_values) == 1:
+                (result, lineno) = original_values[ZERO]
+            self.line_more(result)
         return self
 
     def is_none(self):
