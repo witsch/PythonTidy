@@ -98,7 +98,16 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.10'  # 2007 Jan 14
+VERSION = '1.11'  # 2007 Jan 22
+
+# 2007 Jan 22 . v1.11 . ccr . This update implements a couple of
+# well-taken user requests:
+
+# Jens Diemer wants a module-level function, *tidy_up*, to accept file
+# names or file-like objects.
+
+# Wolfgang Grafen wants trailing spaces eliminated to avoid spurious
+# differences with pre-tidied code.
 
 # 2007 Jan 14 . v1.10 . ccr . There was a big problem with earlier
 # versions: Canonical values were substituted for strings and numbers.
@@ -512,15 +521,13 @@ class InputUnit(object):
 
     """
 
-    def __init__(self):
+    def __init__(self, file_in):
         object.__init__(self)
-        self.fn = '-'  # 2006 Dec 01
-        if len(sys.argv) > 1:
-            self.fn = sys.argv[1]
-        if self.fn == '-':
-            buffer = sys.stdin.read()  # 2006 Dec 05
+        self.is_file_like = hasattr(file_in, 'read')  # 2007 Jan 22
+        if self.is_file_like:
+            buffer = file_in.read()  # 2006 Dec 05
         else:
-            unit = open(os.path.expanduser(self.fn), 'rb')
+            unit = open(os.path.expanduser(file_in), 'rb')
             buffer = unit.read()  # 2006 Dec 05
             unit.close()
         self.lines = UNIVERSAL_NEW_LINE_PATTERN.split(buffer)  # 2006 Dec 05
@@ -577,32 +584,29 @@ class InputUnit(object):
         return str  # It will not do to feed Unicode to *compiler.parse*.
 
 
-INPUT = InputUnit()
-
-
 class OutputUnit(object):
 
     """Line-buffered wrapper for sys.stdout.
 
     """
 
-    def __init__(self):
+    def __init__(self, file_out):
         object.__init__(self)
-        self.fn = '-'  # 2006 Dec 01
-        if len(sys.argv) > 2:
-            self.fn = sys.argv[2]
-        if self.fn == '-':
-            self.unit = sys.stdout = codecs.getwriter(CODING)(sys.stdout)
+        self.is_file_like = hasattr(file_out, 'write')  # 2007 Jan 22
+        if self.is_file_like:
+            self.unit = codecs.getwriter(CODING)(file_out)
         else:
-            self.unit = codecs.open(os.path.expanduser(self.fn), 'wb', CODING)
+            self.unit = codecs.open(os.path.expanduser(file_out), 'wb', CODING)
         self.blank_line_count = 1
         self.margin = LEFT_MARGIN
         self.newline = INPUT.newline  # 2006 Dec 05
         self.lineno = ZERO  # 2006 Dec 14
+        self.buffer = NULL 
         return
 
     def close(self):  # 2006 Dec 01
-        if self.fn == '-':
+        self.unit.write(self.buffer)  # 2007 Jan 22
+        if self.is_file_like:
             pass
         else:
             self.unit.close()
@@ -676,7 +680,11 @@ class OutputUnit(object):
 
     def put(self, text):  # 2006 Dec 14
         self.lineno += text.count(self.newline)
-        self.unit.write(text)
+        self.buffer += text  # 2007 Jan 22
+        if self.buffer.endswith('\n'):
+            self.unit.write(self.buffer.rstrip())
+            self.unit.write('\n')
+            self.buffer = NULL
         return self
 
     def put_blank_line(self, trace, count=1):
@@ -710,9 +718,6 @@ class OutputUnit(object):
     def dec_margin(self):
         self.margin = (self.margin)[:-len(INDENTATION)]
         return self
-
-
-OUTPUT = OutputUnit()
 
 
 class Comments(dict):
@@ -750,7 +755,11 @@ class Comments(dict):
                         pass
                     else:
                         original_values = self.literal_pool.setdefault(canonical_value, [])
-                        original_values.append([token_string, self.max_lineno])
+                        for (token, lineno) in original_values:  # 2007 Jan 17
+                            if token == token_string:
+                                break
+                        else:
+                            original_values.append([token_string, self.max_lineno])
                 except:
                     pass
         self.prev_lineno = NA
@@ -809,9 +818,6 @@ class Comments(dict):
         if on1:
             OUTPUT.line_term()
         return self
-
-
-COMMENTS = Comments()
 
 
 class Name(list):  # 2006 Dec 14
@@ -946,9 +952,6 @@ class NameSpace(list):
 
     def is_global(self):
         return len(self) == 1
-
-
-NAME_SPACE = NameSpace()
 
 
 def transform(indent, lineno, node):
@@ -4048,11 +4051,45 @@ for LEVEL in OPERATOR_PRECEDENCE:
         OPERATOR_TRUMPS[OPERATOR] = OPERATORS[:]  # a static copy.
     OPERATORS.extend(LEVEL)
 
-MODULE = compiler.parse(str(INPUT))
-MODULE = transform(indent=ZERO, lineno=ZERO, node=MODULE)
-del INPUT  # 2006 Dec 01
-MODULE.push_scope().marshal_names().put().pop_scope()
-COMMENTS.merge(fin=True)
-OUTPUT.close()  # 2006 Dec 01
+
+def tidy_up(file_in=sys.stdin, file_out=sys.stdout):  # 2007 Jan 22
+
+    """Clean up, regularize, and reformat the text of a Python script.
+
+    File_in is a file name or a file-like object with a *read* method,
+    which contains the input script.
+
+    File_out is a file name or a file-like object with a *write*
+    method to contain the output script.
+
+    """
+
+    global INPUT, OUTPUT, COMMENTS, NAME_SPACE
+    INPUT = InputUnit(file_in)
+    OUTPUT = OutputUnit(file_out)
+    COMMENTS = Comments()
+    NAME_SPACE = NameSpace()
+    module = compiler.parse(str(INPUT))
+    module = transform(indent=ZERO, lineno=ZERO, node=module)
+    del INPUT
+    module.push_scope().marshal_names().put().pop_scope()
+    COMMENTS.merge(fin=True)
+    OUTPUT.close()
+    return
+
+if __name__ == "__main__":  # 2007 Jan 22
+    if len(sys.argv) > 1:
+        file_in = sys.argv[1]
+    else:
+        file_in = '-'
+    if file_in in ['-']:
+        file_in = sys.stdin
+    if len(sys.argv) > 2:
+        file_out = sys.argv[2]
+    else:
+        file_out = '-'
+    if file_out in ['-']:
+        file_out = sys.stdout
+    tidy_up(file_in, file_out)
 
 # Fin
