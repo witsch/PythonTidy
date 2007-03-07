@@ -70,7 +70,7 @@ actually work.
 Search this script for "Python Version Dependency."
 
 Most of the Python 2.5 test suite passes through PythonTidy.py
-unimpaired.  Here are some tests that don\t:
+unimpaired.  Here are some tests that don\'t:
 
     test_cProfile.py
     test_dis.py
@@ -98,7 +98,12 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.11'  # 2007 Jan 22
+VERSION = '1.12'  # 2007 Mar 06
+
+# 2007 Mar 06 . v1.12 . ccr . The requests of Aaron Bingham: Specify
+# boilerplate to be inserted after the module doc string.  Optionally
+# split wide string literals at the column limit.  Force trailing
+# newline.
 
 # 2007 Jan 22 . v1.11 . ccr . This update implements a couple of
 # well-taken user requests:
@@ -180,6 +185,7 @@ COMMENT_PREFIX = '#'
 SHEBANG = '#!/usr/bin/python'
 CODING = 'utf-8'
 CODING_SPEC = '# -*- coding: %s -*-' % CODING
+BOILERPLATE = NULL  # 2007 Mar 06
 BLANK_LINE = NULL
 KEEP_BLANK_LINES = True
 ADD_BLANK_LINES_AROUND_COMMENTS = True
@@ -190,6 +196,7 @@ LEFTJUST_DOC_STRINGS = False
 DOUBLE_QUOTED_STRINGS = False  # 2006 Dec 05
 RECODE_STRINGS = False  # 2006 Dec 01
 OVERRIDE_NEWLINE = None  # 2006 Dec 05
+CAN_SPLIT_STRINGS = False  # 2007 Mar 06
 
 # Repertoire of name-transformation functions:
 
@@ -578,7 +585,16 @@ class InputUnit(object):
         return [line for line in self]
 
     def __str__(self):  # 2006 Dec 05
-        return NULL.join(self.readlines())
+        result = self.readlines()
+        while result[:-1] == NULL:
+            result.pop(-1)
+        last_line = result[-1]
+        if last_line[:-1] == '\n':  # 2007 Mar 07
+            pass
+        else:
+            last_line += '\n'
+            result[-1] = last_line
+        return NULL.join(result)
 
     def decode(self, str):
         return str  # It will not do to feed Unicode to *compiler.parse*.
@@ -625,10 +641,23 @@ class OutputUnit(object):
         self.line_more(margin)
         return self
 
-    def line_more(self, chunk=NULL, tab_set=False, tab_clear=False, 
-                  can_split_after=False, can_break_after=False):
-        self.chunks.append([chunk, tab_set, tab_clear, can_split_after, 
-                           can_break_after])
+    def line_more(
+        self,
+        chunk=NULL,
+        tab_set=False,
+        tab_clear=False, 
+        can_split_str=False,
+        can_split_after=False,
+        can_break_after=False,
+        ):  # 2007 Mar 06
+        self.chunks.append([
+            chunk,
+            tab_set,
+            tab_clear,
+            can_split_str,
+            can_split_after, 
+            can_break_after,
+            ])
         self.col += len(chunk)
         return self
 
@@ -637,19 +666,39 @@ class OutputUnit(object):
         def is_split_needed():
             width = len(chunk)
             pos = self.pos
-            return pos + width > COL_LIMIT and pos > ZERO
+            return ((pos + width) > COL_LIMIT) and (pos > ZERO)
 
         self.pos = ZERO
         can_split_before = False
         can_break_before = False
-        for (chunk, tab_set, tab_clear, can_split_after, can_break_after) in \
-            self.chunks:
+        for (
+            chunk,
+            tab_set,
+            tab_clear,
+            can_split_str,
+            can_split_after,
+            can_break_after,
+            ) in self.chunks:
             if is_split_needed():
                 if can_split_before:
                     self.line_split()
                 elif can_break_before:
                     self.line_break()
-            self.put(chunk)  # 2006 Dec 14
+            if can_split_str:  # 2007 Mar 06
+                quote = chunk[:1]
+                while is_split_needed():
+                    take = COL_LIMIT - self.pos - 2
+                    if take < 20:
+                        break
+                    self.put(chunk[:take] + quote)
+                    chunk = quote + chunk[take:]
+                    if can_split_after:
+                        self.line_split()
+                    else:
+                        self.line_break()
+                self.put(chunk)
+            else:
+                self.put(chunk)  # 2006 Dec 14
             self.pos += len(chunk)
             if tab_set:
                 self.tab_set(self.pos)
@@ -755,8 +804,8 @@ class Comments(dict):
                         pass
                     else:
                         original_values = self.literal_pool.setdefault(canonical_value, [])
-                        for (token, lineno) in original_values:  # 2007 Jan 17
-                            if token == token_string:
+                        for (tok, lineno) in original_values:  # 2007 Jan 17
+                            if tok == token_string:
                                 break
                         else:
                             original_values.append([token_string, self.max_lineno])
@@ -1173,10 +1222,23 @@ class Node(object):
         OUTPUT.line_init(self.indent, self.get_lineno())
         return self
 
-    def line_more(self, chunk, tab_set=False, tab_clear=False, 
-                  can_split_after=False, can_break_after=False):
-        OUTPUT.line_more(chunk, tab_set, tab_clear, can_split_after, 
-                         can_break_after)
+    def line_more(
+        self,
+        chunk,
+        tab_set=False,
+        tab_clear=False,
+        can_split_str=False,
+        can_split_after=False,
+        can_break_after=False,
+        ):
+        OUTPUT.line_more(
+            chunk,
+            tab_set,
+            tab_clear,
+            can_split_str,
+            can_split_after, 
+            can_break_after,
+            )
         return self
 
     def line_term(self, lineno=ZERO):
@@ -1311,7 +1373,7 @@ class NodeStr(Node):
         lit = QUOTE_PATTERN.sub(prefix + quote, lit, 1)
         return lit
 
-    def put_lit(self):
+    def put_lit(self, can_split=False):
         lit = self.get_as_str()
         result = repr(lit)
         original_values = COMMENTS.literal_pool.get(result, [])  # 2007 Jan 14
@@ -1327,7 +1389,7 @@ class NodeStr(Node):
             lit = OUTPUT.newline.join(lines)  # 2006 Dec 05
             self.put_multi_line(lit)
         else:
-            self.line_more(lit)
+            self.line_more(lit, can_split_str=CAN_SPLIT_STRINGS, can_split_after=can_split)
         return self
 
     def put_multi_line(self, lit):  # 2006 Dec 01
@@ -1385,8 +1447,7 @@ class NodeAdd(NodeOpr):
 
     def put(self, can_split=False):
         self.put_expr(self.left, can_split=can_split)
-        self.line_more(' + ', can_split_after=can_split, can_break_after=
-                       True)
+        self.line_more(' + ', can_split_after=can_split, can_break_after=True)
         self.put_expr(self.right, can_split=can_split)
         return self
 
@@ -1891,8 +1952,7 @@ class NodeCallFunc(Node):
                 if self.star_args is None and self.dstar_args is None:
                     pass
                 else:
-                    self.line_more(FUNCTION_PARAM_SEP, can_split_after=
-                                   True)
+                    self.line_more(FUNCTION_PARAM_SEP, can_split_after=True)
             if self.star_args is None:
                 pass
             else:
@@ -1901,8 +1961,7 @@ class NodeCallFunc(Node):
                 if self.dstar_args is None:
                     pass
                 else:
-                    self.line_more(FUNCTION_PARAM_SEP, can_split_after=
-                                   True)
+                    self.line_more(FUNCTION_PARAM_SEP, can_split_after=True)
             if self.dstar_args is None:
                 pass
             else:
@@ -2034,7 +2093,7 @@ class NodeConst(Node):
 
     def put(self, can_split=False):
         if isinstance(self.value, NodeStr):
-            self.value.put_lit()
+            self.value.put_lit(can_split=can_split)
         elif isinstance(self.value, Node):
             self.value.put(can_split=can_split)
         else:
@@ -2190,8 +2249,7 @@ class NodeDiv(NodeOpr):
 
     def put(self, can_split=False):
         self.put_expr(self.left, can_split=can_split)
-        self.line_more(' / ', can_split_after=can_split, can_break_after=
-                       True)
+        self.line_more(' / ', can_split_after=can_split, can_break_after=True)
         self.put_expr(self.right, can_split=can_split)
         return self
 
@@ -3128,8 +3186,7 @@ class NodeMod(NodeOpr):
 
     def put(self, can_split=False):
         self.put_expr(self.left, can_split=can_split)
-        self.line_more(' % ', can_split_after=can_split, can_break_after=
-                       True)
+        self.line_more(' % ', can_split_after=can_split, can_break_after=True)
         self.put_expr(self.right, can_split=can_split)
         return self
 
@@ -3159,6 +3216,12 @@ class NodeModule(Node):
         else:
             self.doc.lineno = self.get_lineno()
             self.doc.put_doc()
+        if BOILERPLATE == NULL:  # 2007 Mar 06
+            pass
+        else:
+            self.line_init()
+            self.line_more(BOILERPLATE)
+            self.line_term()
         self.node.put()
         return self
 
@@ -3195,8 +3258,7 @@ class NodeMul(NodeOpr):
 
     def put(self, can_split=False):
         self.put_expr(self.left, can_split=can_split)
-        self.line_more(' * ', can_split_after=can_split, can_break_after=
-                       True)
+        self.line_more(' * ', can_split_after=can_split, can_break_after=True)
         self.put_expr(self.right, can_split=can_split)
         return self
 
@@ -3657,8 +3719,7 @@ class NodeSub(NodeOpr):
 
     def put(self, can_split=False):
         self.put_expr(self.left, can_split=can_split)
-        self.line_more(' - ', can_split_after=can_split, can_break_after=
-                       True)
+        self.line_more(' - ', can_split_after=can_split, can_break_after=True)
         self.put_expr(self.right, can_split=can_split)
         return self
 
