@@ -99,7 +99,17 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.15'  # 2007 May 25
+VERSION = '1.16'  # 2008 Jan 06
+
+# 2008 Jan 06 . v1.16 . ccr . John Machin demonstrates that hex values
+# are not in fact stored in the literal pool.  They should always have
+# been and should always be.
+
+# Apparently doubled number-signs in columns one and two are
+# sacrosanct sentinels in Fredrik Lundh's PythonDoc documentation
+# generator and must not therefore be disturbed.
+
+# Fix a crash caused by indents' crossing the centerline.
 
 # 2007 May 25 . v1.15 . ccr . Don't split lines in the middle of
 # function-parameter assignment.
@@ -604,11 +614,15 @@ def force_quote(encoded, double=True, quoted=True):  # 2007 May 01
     
     if quoted:  # 2007 May 23
         match = QUOTE_PATTERN.match(encoded)
-        (prefix, quote_old) = match.group(1, 2)
-        encoded = QUOTE_PATTERN.sub(NULL, encoded, 1)
-        size = len(quote_old)
-        assert encoded[-size:] == quote_old
-        encoded = encoded[:-size]
+        if match is None:  # 2008 Jan 06
+            prefix = NULL
+            size = 1
+        else:
+            (prefix, quote_old) = match.group(1, 2)
+            encoded = QUOTE_PATTERN.sub(NULL, encoded, 1)
+            size = len(quote_old)
+            assert encoded[-size:] == quote_old
+            encoded = encoded[:-size]
     else:
         prefix = NULL
         size = 1
@@ -956,7 +970,10 @@ class OutputUnit(object):
 
     def tab_set(self, col):
         if col > COL_LIMIT / 2:
-            col = (self.tab_stack)[-1] + 4
+            if self.tab_stack:  # 2008 Jan 06
+                col = (self.tab_stack)[-1] + 4
+            else:
+                col = 4
         self.tab_stack.append(col)
         return self
 
@@ -1138,8 +1155,12 @@ class Comments(dict):
                 OUTPUT.put_blank_line(2)
             else:
                 OUTPUT.line_init()
-                OUTPUT.line_more(margin(scol))
-                OUTPUT.line_more(line)
+                margin_string = margin(scol)
+                if (margin_string == '# ') and (line == '#'):  # 2008 Jan 06
+                    OUTPUT.line_more('##')
+                else:
+                    OUTPUT.line_more(margin(scol))
+                    OUTPUT.line_more(line)
                 OUTPUT.line_term()
         if text and is_blank_line_needed() and not fin:
             OUTPUT.put_blank_line(3)
@@ -1738,7 +1759,7 @@ class NodeInt(Node):
         return self
 
     def get_as_repr(self):
-        original_values = COMMENTS.literal_pool.get(int, [])  # 2007 May 01
+        original_values = COMMENTS.literal_pool.get(self.int, [])  # 2008 Jan 6
         if len(original_values) == 1:
             (result, lineno) = original_values[ZERO]
         else:
