@@ -99,13 +99,16 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.16'  # 2008 Jan 06
+VERSION = '1.17'  # 2008 Jan 06
+
+# 2008 Jan 30 . v1.17 . ccr . This fixes regression in newline support
+# introduced at v1.11, which was first reported by Dr0id.
 
 # 2008 Jan 06 . v1.16 . ccr . John Machin demonstrates that hex values
 # are not in fact stored in the literal pool.  They should always have
 # been and should always be.
 
-# Apparently doubled number-signs in columns one and two are
+# Apparently, doubled number-signs in columns one and two are
 # sacrosanct sentinels in Fredrik Lundh's PythonDoc documentation
 # generator and must not therefore be disturbed.
 
@@ -186,7 +189,7 @@ VERSION = '1.16'  # 2008 Jan 06
 # input to output (transparently :-) ).
 
 # 2006 Dec 01 . v1.4 . ccr . Tighten qualifications for in-line
-# comments.  Decode string nodes.  Enclose docstrings in double
+# comments.  Decode string nodes.  Enclose doc strings in double
 # quotes.  Allow file-name arguments.
 
 # 2006 Nov 30 . v1.3 . ccr . Safe check against names of *compiler* .
@@ -951,9 +954,9 @@ class OutputUnit(object):
     def put(self, text):  # 2006 Dec 14
         self.lineno += text.count(self.newline)
         self.buffer += text  # 2007 Jan 22
-        if self.buffer.endswith('\n'):
+        if self.buffer.endswith('\n') or self.buffer.endswith('\r'):  # 2008 Jan 30
             self.unit.write(self.buffer.rstrip())
-            self.unit.write('\n')
+            self.unit.write(self.newline)  # 2008 Jan 30
             self.buffer = NULL
         return self
 
