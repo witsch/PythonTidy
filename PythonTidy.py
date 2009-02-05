@@ -99,7 +99,10 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.17'  # 2008 Jan 06
+VERSION = '1.18'  # 2009 Feb 05
+
+# 2009 Feb 05 . v1.18 . ccr . For Massimo Di Pierro at
+# http://mdp.cti.depaul.edu/, do not break up raw literals.
 
 # 2008 Jan 30 . v1.17 . ccr . This fixes regression in newline support
 # introduced at v1.11, which was first reported by Dr0id.
@@ -1722,12 +1725,17 @@ class NodeStr(Node):
 
     def put_lit(self, can_split=False):
         lit = self.get_as_repr()  # 2007 May 01
-        lines = NEW_LINE_PATTERN.split(lit)
-        if len(lines) > MAX_LINES_BEFORE_SPLIT_LIT:
-            lit = OUTPUT.newline.join(lines)  # 2006 Dec 05
-            self.put_multi_line(lit)
-        else:
+        match = QUOTE_PATTERN.match(lit)  # 2009 Feb 05
+        (prefix, quote) = match.group(1, 2)
+        if ('r' in prefix.lower()):  # 2009 Feb 05
             self.line_more(lit, can_split_str=CAN_SPLIT_STRINGS, can_split_after=can_split)
+        else:
+            lines = NEW_LINE_PATTERN.split(lit)
+            if len(lines) > MAX_LINES_BEFORE_SPLIT_LIT:
+                lit = OUTPUT.newline.join(lines)  # 2006 Dec 05
+                self.put_multi_line(lit)
+            else:
+                self.line_more(lit, can_split_str=CAN_SPLIT_STRINGS, can_split_after=can_split)
         return self
 
     def put_multi_line(self, lit):  # 2006 Dec 01
