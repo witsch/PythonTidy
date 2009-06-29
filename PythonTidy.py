@@ -99,7 +99,12 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.18'  # 2009 Feb 05
+VERSION = '1.19'  # 2009 Jun 29
+
+# 2009 Jun 29 . v1.19 . ccr . For Daniel G. Siegel at
+# http://home.cs.tum.edu, *python* 2.6 tokenizer returns newlines
+# separate from comments, so, though it may be necessary to save
+# newlines, it won't do for them to overlay comments.
 
 # 2009 Feb 05 . v1.18 . ccr . For Massimo Di Pierro at
 # http://mdp.cti.depaul.edu/, do not break up raw literals.
@@ -1053,7 +1058,10 @@ class Comments(dict):
                     original = COMMENT_PATTERN.sub(NULL, original, 1)  # 2007 May 25
                     if (token_type in [tokenize.COMMENT]) and (original in [NULL]):
                         original = SPACE
-                    self[self.max_lineno] = [scol, original]
+                    if self.max_lineno in self:  # 2009 Jun 29
+                        pass
+                    else:
+                        self[self.max_lineno] = [scol, original]
             elif token_type in [tokenize.NUMBER, tokenize.STRING]:  # 2007 Jan 14
                 try:
                     original = token_string.strip().decode(INPUT.coding, 'backslashreplace')
