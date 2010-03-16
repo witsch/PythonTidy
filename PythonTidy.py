@@ -37,7 +37,7 @@ version to standard output.
 
 Alternatively, it may be invoked with file names as arguments:
 
-  python PythonTidy.py input output
+o python PythonTidy.py input output
 
 Suffice it to say that *input* defaults to \'-\', the standard input,
 and *output* defaults to \'-\', the standard output.
@@ -70,18 +70,39 @@ actually work.
 Search this script for "Python Version Dependency."
 
 Most of the Python 2.5 test suite passes through PythonTidy.py
-unimpaired.  Here are some tests that don\'t:
+unimpaired.  I ran the Python regression tests for 2.5.2 which is the
+version supported by Debian 5.0 "Lenny."
 
-    test_codeccallbacks.py
-    test_cProfile.py
-    test_dis.py
-    test_doctest.py
-    test_grammar.py
-    test_inspect.py
-    test_pep263.py
-    test_profile.py
-    test_sys.py
-    test_trace.py
+On my system these tests fail before tidying:
+
+o test_imageop
+o test_pyclbr
+o test_sys
+
+282 tests succeed after tidying with the default PythonTidy global
+settings, but these tests fail:
+
+*test_grammar* exposes bug 6978 in the *compiler* module.  Tuples are
+immutable and hashable and thus suitable as dict indices.  Whereas a
+singleton tuple literal (x,) is valid as an index, the *compiler*
+module parses it as x when it appears.
+
+*test_dis* compares "disassembled" Python byte code to what is
+expected.  While byte code for a tidied script should be functionally
+equivalent to the untidied version, it will not necessarily be
+identical.
+
+*test_trace* compares the line numbers in a functional trace of a
+running script with those expected.  A statement in a tidied script
+will generally have a line number slightly different from the same
+statement in the untidied version.
+
+*test_doctest* is an extensive suite of tests of the *doctest* module,
+which itself is used to document test code within doc strings and at
+need to compare instant results against those expected.  One of the
+tests in *test_doctest* appears to require line numbers consistent
+with expectations, but tidied scripts generally violate such
+conditions as explained above.
 
 The more esoteric capabilities of PythonTidy.py had to be turned off
 to avoid corrupting the test-suite code.  In practice, you\'ll want to
@@ -99,7 +120,47 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.19'  # 2009 Jun 29
+VERSION = '1.20'  # 2010 Mar 10
+
+# 2010 Mar 10 . v1.20 . ccr . For Kuang-che Wu:
+#
+# o Optionally preserve unassigned constants so that code to be tidied
+# may contain blocks of commented-out lines that have been no-op'ed
+# with leading and trailing triple quotes.  Python scripts may declare
+# constants without assigning them to a variables, but PythonTidy
+# considers this wasteful and normally elides them.
+#
+# o Generalize an earlier exception made for PythonDoc sentinels so
+# that the COMMENT_PREFIX is not inserted before any comments that
+# start with doubled number-signs.
+#
+# o Optionally omit parentheses around tuples, which are superfluous
+# after all.  Normal PythonTidy behavior will be still to include them
+# as a sort of tuple display analogous to list displays, dict
+# displays, and yet-to-come set displays.
+#
+# o Kuang-che Wu has provided code that removes superfluous parens in
+# complex algebraic and logical expressions, which PythonTidy used to
+# interpolate to make operator precedence explicit.  From now on
+# PythonTidy will rely upon default operator precedence and insert
+# parens only to enforce order of evaluation that is not default.
+# This should make tidied code more succinct, which usually results in
+# improved legibility.  This fixes a PythonTidy bug noticed by
+# Kuang-che Wu having to do with order of evaluation of comparisons.
+#
+# o As a matter of style per PEP 308, parentheses are preferred around
+# conditional expressions.
+#
+# o Give the bitwise invert operator the same precedence as unary plus
+# and unary minus.
+#
+# I am making other changes to PythonTidy so that a few more of the
+# examples from the Python *test* module will pass:
+#
+# o Index literal pool by type.  (Use *repr*.)
+#
+# o Never append a trailing comma to starred or double-starred
+# arguments.
 
 # 2009 Jun 29 . v1.19 . ccr . For Daniel G. Siegel at
 # http://home.cs.tum.edu, *python* 2.6 tokenizer returns newlines
@@ -253,9 +314,11 @@ WRAP_DOC_STRINGS = False  # 2007 May 25
 DOUBLE_QUOTED_STRINGS = False  # 2006 Dec 05
 SINGLE_QUOTED_STRINGS = False  # 2007 May 01
 RECODE_STRINGS = False  # 2006 Dec 01
-OVERRIDE_NEWLINE = None  # 2006 Dec 05
+OVERRIDE_NEWLINE = '\n'  # 2006 Dec 05
 CAN_SPLIT_STRINGS = False  # 2007 Mar 06
 DOC_TAB_REPLACEMENT = '....'  # 2007 May 24
+KEEP_UNASSIGNED_CONSTANTS = False  # 2010 Mar 10
+PARENTHESIZE_TUPLE_DISPLAY = True  # 2010 Mar 10
 
 # Repertoire of name-transformation functions:
 
@@ -809,7 +872,8 @@ class OutputUnit(object):
         self.margin = LEFT_MARGIN
         self.newline = INPUT.newline  # 2006 Dec 05
         self.lineno = ZERO  # 2006 Dec 14
-        self.buffer = NULL 
+        self.buffer = NULL
+        self.chunks = None  # 2009 Oct 26
         return
 
     def close(self):  # 2006 Dec 01
@@ -1067,13 +1131,12 @@ class Comments(dict):
                     original = token_string.strip().decode(INPUT.coding, 'backslashreplace')
                     decoded = eval(original)  # 2007 May 01
                     encoded = repr(decoded)
-                    if encoded == original:
-                        pass
-                    elif encoded == force_quote(original, double=False):
+                    if (encoded == original) or (encoded == force_quote(original, double=False)):
                         pass
                     else:
                         original = quote_original(token_type, original)  # 2007 May 01
-                        original_values = self.literal_pool.setdefault(decoded, [])  # 2007 May 01
+                        original_values = \
+                            self.literal_pool.setdefault(encoded, [])  # 2010 Mar 10
                         for (tok, lineno) in original_values:  # 2007 Jan 17
                             if tok == original:
                                 break
@@ -1081,9 +1144,9 @@ class Comments(dict):
                             original_values.append([original, self.max_lineno])
                 except:
                     pass
-        self.prev_lineno = NA
+        self.prev_lineno = -2  # 2010 Mar 10
         self[self.prev_lineno] = (NA, SHEBANG)  # 2007 May 25
-        self[ZERO] = (NA, CODING_SPEC)  # 2007 May 25
+        self[NA] = (NA, CODING_SPEC)  # 2007 May 25
         return 
 
     def merge(self, lineno=None, fin=False):
@@ -1170,11 +1233,11 @@ class Comments(dict):
             else:
                 OUTPUT.line_init()
                 margin_string = margin(scol)
-                if (margin_string == '# ') and (line == '#'):  # 2008 Jan 06
-                    OUTPUT.line_more('##')
+                if (margin_string == '# ') and (line.startswith('#')):  # 2010 Mar 10
+                    OUTPUT.line_more('#')  # 2010 Mar 10
                 else:
                     OUTPUT.line_more(margin(scol))
-                    OUTPUT.line_more(line)
+                OUTPUT.line_more(line)
                 OUTPUT.line_term()
         if text and is_blank_line_needed() and not fin:
             OUTPUT.put_blank_line(3)
@@ -1634,18 +1697,12 @@ class Node(object):
         return self
 
 
-class NodeOpr(Node):
-
-    """Operator.
-
-    """
+class NodeOpr(Node):  # 2010 Mar 10
 
     tag = 'Opr'
-    is_commutative = True
 
-    def put_expr(self, node, can_split=False):
-        if type(node) in OPERATOR_TRUMPS[type(self)] or type(node) in \
-            OPERATOR_LEVEL[type(self)] and not self.is_commutative:
+    def put_expr(self, node, can_split=False, pos=None):
+        if self.is_paren_needed(node, pos):
             self.line_more('(', tab_set=True)
             node.put(can_split=True)
             self.line_more(')', tab_clear=True)
@@ -1653,6 +1710,67 @@ class NodeOpr(Node):
             node.put(can_split=can_split)
         return self
 
+    def is_paren_needed(self, node, pos):
+        return type(node) in OPERATOR_TRUMPS[type(self)]
+
+
+class NodeOprAssoc(NodeOpr):  # 2010 Mar 10
+
+    tag = 'A_Opr'
+
+
+class NodeOprNotAssoc(NodeOpr):  # 2010 Mar 10
+
+    tag = 'NA_Opr'
+    
+    def is_paren_needed(self, node, pos):
+        if NodeOpr.is_paren_needed(self, node, pos):
+            result = True
+        elif type(node) in OPERATOR_LEVEL[type(self)]:
+            result = True
+        else:
+            result = False
+        return result
+   
+
+class NodeOprLeftAssoc(NodeOpr):  # 2010 Mar 10
+
+    """Left-associative operator.
+
+    """
+
+    tag = 'LA_Opr'
+
+    def is_paren_needed(self, node, pos):
+        if NodeOpr.is_paren_needed(self, node, pos):
+            result = True
+        elif type(node) in OPERATOR_LEVEL[type(self)]:
+            result = not (pos == 'left') 
+        else:
+            result = False
+        return result
+   
+
+class NodeOprRightAssoc(NodeOpr):  # 2010 Mar 10
+
+    """Right-associative operator.
+
+    """
+
+    tag = 'RA_Opr'
+
+    def is_paren_needed(self, node, pos):
+        if NodeOpr.is_paren_needed(self, node, pos):
+            if type(node) in [NodeUnaryAdd, NodeUnarySub]:
+                result = not (pos == 'right')
+            else:
+                result = True
+        elif type(node) in OPERATOR_LEVEL[type(self)]:
+            result = not (pos == 'right')
+        else:
+            result = False
+        return result
+    
 
 class NodeStr(Node):
 
@@ -1692,7 +1810,7 @@ class NodeStr(Node):
         return self
 
     def get_as_repr(self):  # 2007 May 01
-        original_values = COMMENTS.literal_pool.get(self.get_as_str(), [])
+        original_values = COMMENTS.literal_pool.get(repr(self.get_as_str()), [])  # 2010 Mar 10
         if len(original_values) == 1:
             (result, lineno) = original_values[ZERO]
         else:
@@ -1704,11 +1822,13 @@ class NodeStr(Node):
         return result
 
     def put_doc(self, need_blank_line=ZERO):
-        doc = self.get_as_str()
-        if isinstance(doc, unicode):  # 2007 May 23
-            pass
-        else:
-            doc = unicode(doc, INPUT_CODING)
+
+        def fix_newlines(text):  # 2010 Mar 10
+            lines = text.splitlines()
+            result = OUTPUT.newline.join(lines)  # 2006 Dec 05
+            return result
+
+        doc = self.get_as_repr()  # 2010 Mar 10
         doc = doc.replace('\t', DOC_TAB_REPLACEMENT)  # 2007 May 24
         if LEFTJUST_DOC_STRINGS:
             lines = leftjust_lines(doc.strip().splitlines())  # 2007 May 25
@@ -1723,10 +1843,8 @@ class NodeStr(Node):
             lines.extend([NULL, NULL])
             doc = margin.join(lines)
         self.line_init(need_blank_line=need_blank_line)  # 2006 Dec 01
-        quoted = force_quote(doc, double=True, quoted=False)  # 2007 May 23
-        lines = NEW_LINE_PATTERN.split(quoted)
-        quoted = OUTPUT.newline.join(lines)  # 2006 Dec 05
-        self.put_multi_line(quoted)
+        doc = fix_newlines(doc)  # 2010 Mar 10
+        self.put_multi_line(doc)
         self.line_term()
         OUTPUT.put_blank_line(5)
         return self
@@ -1778,7 +1896,7 @@ class NodeInt(Node):
         return self
 
     def get_as_repr(self):
-        original_values = COMMENTS.literal_pool.get(self.int, [])  # 2008 Jan 6
+        original_values = COMMENTS.literal_pool.get(repr(self.int), [])  # 2010 Mar 10
         if len(original_values) == 1:
             (result, lineno) = original_values[ZERO]
         else:
@@ -1786,7 +1904,7 @@ class NodeInt(Node):
         return result
 
 
-class NodeAdd(NodeOpr):
+class NodeAdd(NodeOprAssoc):  # 2010 Mar 10
 
     """Add operation.
 
@@ -1802,8 +1920,8 @@ class NodeAdd(NodeOpr):
 
     def put(self, can_split=False):
         self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' + ')
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('+ ')
         self.put_expr(self.right, can_split=can_split)
         return self
 
@@ -1811,7 +1929,7 @@ class NodeAdd(NodeOpr):
         return self.right.get_hi_lineno()
 
 
-class NodeAnd(NodeOpr):
+class NodeAnd(NodeOprAssoc):  # 2010 Mar 10
 
     '''Logical "and" operation.
 
@@ -1828,8 +1946,8 @@ class NodeAnd(NodeOpr):
         for node in (self.nodes)[:1]:
             self.put_expr(node, can_split=can_split)
         for node in (self.nodes)[1:]:
-            self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-            self.line_more(' and ')
+            self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+            self.line_more('and ')
             self.put_expr(node, can_split=can_split)
         return self
 
@@ -1978,9 +2096,9 @@ class NodeAsgTuple(Node):
         self.nodes = [transform(indent, lineno, node) for node in nodes]
         return 
 
-    def put(self, can_split=False):
-        self.line_more('(', tab_set=True)
+    def put(self, can_split=False, is_paren_required=True):  # 2010 Mar 10
         if len(self.nodes) > MAX_SEPS_SERIES:  # 2007 May 24
+            self.line_more('(', tab_set=True)  # 2010 Mar 10
             self.line_term()
             self.inc_margin()
             for node in self.nodes:
@@ -1990,16 +2108,27 @@ class NodeAsgTuple(Node):
                 self.line_term()
             self.line_init()
             self.dec_margin()
-        else:
+            self.line_more(')', tab_clear=True)  # 2010 Mar 10
+        elif is_paren_required or PARENTHESIZE_TUPLE_DISPLAY:  # 2010 Mar 10
+            self.line_more('(', tab_set=True)  # 2010 Mar 10
             for node in (self.nodes)[:1]:
                 node.put(can_split=True)
-            self.line_more(LIST_SEP, can_split_after=True)
+                self.line_more(LIST_SEP, can_split_after=True)
             for node in (self.nodes)[1:2]:
                 node.put(can_split=True)
             for node in (self.nodes)[2:]:
                 self.line_more(LIST_SEP, can_split_after=True)
                 node.put(can_split=True)
-        self.line_more(')', tab_clear=True)
+            self.line_more(')', tab_clear=True)  # 2010 Mar 10
+        else:
+            for node in (self.nodes)[:1]:
+                node.put()
+                self.line_more(LIST_SEP, can_break_after=True)  # 2010 Mar 10
+            for node in (self.nodes)[1:2]:
+                node.put()
+            for node in (self.nodes)[2:]:
+                self.line_more(LIST_SEP, can_break_after=True)  # 2010 Mar 10
+                node.put()
         return self
 
     def make_local_name(self):
@@ -2063,12 +2192,17 @@ class NodeAssign(Node):
     def put(self, can_split=False):
         self.line_init()
         for node in self.nodes:
-            node.put(can_split=can_split)
+            if isinstance(node, NodeAsgTuple):
+                node.put(can_split=can_split, is_paren_required=False)  # 2010 Mar 10
+            else:
+                node.put(can_split=can_split)
             self.line_more(ASSIGNMENT, can_break_after=True)
         if isinstance(self.expr, NodeYield):  # 2006 Dec 13
             self.line_more('(')
             self.expr.put(can_split=True)
             self.line_more(')')
+        elif isinstance(self.expr, NodeTuple):
+            self.expr.put(can_split=can_split, is_paren_required=False)  # 2010 Mar 10
         else:
             self.expr.put(can_split=can_split)
         self.line_term()
@@ -2138,7 +2272,7 @@ class NodeBackquote(Node):
         return self.expr.get_hi_lineno()
 
 
-class NodeBitAnd(NodeOpr):
+class NodeBitAnd(NodeOprAssoc):  # 2010 Mar 10
 
     '''Bitwise "and" operation (set union).
 
@@ -2155,8 +2289,8 @@ class NodeBitAnd(NodeOpr):
         for node in (self.nodes)[:1]:
             self.put_expr(node, can_split=can_split)
         for node in (self.nodes)[1:]:
-            self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-            self.line_more(' & ')
+            self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+            self.line_more('& ')
             self.put_expr(node, can_split=can_split)
         return self
 
@@ -2164,7 +2298,7 @@ class NodeBitAnd(NodeOpr):
         return (self.nodes)[-1].get_hi_lineno()
 
 
-class NodeBitOr(NodeOpr):
+class NodeBitOr(NodeOprAssoc):  # 2010 Mar 01
 
     '''Bitwise "or" operation (set intersection).
 
@@ -2181,8 +2315,8 @@ class NodeBitOr(NodeOpr):
         for node in (self.nodes)[:1]:
             self.put_expr(node, can_split=can_split)
         for node in (self.nodes)[1:]:
-            self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-            self.line_more(' | ')
+            self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+            self.line_more('| ')
             self.put_expr(node, can_split=can_split)
         return self
 
@@ -2190,7 +2324,7 @@ class NodeBitOr(NodeOpr):
         return (self.nodes)[-1].get_hi_lineno()
 
 
-class NodeBitXor(NodeOpr):
+class NodeBitXor(NodeOprAssoc):  # 2010 Mar 01
 
     '''Bitwise "xor" operation.
 
@@ -2207,8 +2341,8 @@ class NodeBitXor(NodeOpr):
         for node in (self.nodes)[:1]:
             self.put_expr(node, can_split=can_split)
         for node in (self.nodes)[1:]:
-            self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-            self.line_more(' ^ ')
+            self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+            self.line_more('^ ')
             self.put_expr(node, can_split=can_split)
         return self
 
@@ -2279,26 +2413,32 @@ class NodeCallFunc(Node):
         if count_seps() > MAX_SEPS_FUNC_REF:  # 2007 May 24
             self.line_term()
             self.inc_margin()
-            for arg in self.args:
-                self.line_init()
-                arg.put(can_split=True)
-                self.line_more(LIST_SEP)
-                self.line_term()
+            arg_list = [(NULL, arg) for arg in self.args]  # 2010 Mar 10
+            has_stars = False  # 2010 Mar 10
             if self.star_args is None:
                 pass
             else:
-                self.line_init()
-                self.line_more('*')
-                self.star_args.put(can_split=True)
-                self.line_more(LIST_SEP)
-                self.line_term()
+                arg_list.append(('*', self.star_args))
+                has_stars = True
             if self.dstar_args is None:
                 pass
             else:
+                arg_list.append(('**', self.dstar_args))
+                has_stars = True
+            for (sentinel, arg) in arg_list[:-1]:  # 2010 Mar 10
                 self.line_init()
-                self.line_more('**')
-                self.dstar_args.put(can_split=True)
+                self.line_more(sentinel)
+                arg.put(can_split=True)
                 self.line_more(LIST_SEP)
+                self.line_term()
+            for (sentinel, arg) in arg_list[-1:]:  # 2010 Mar 10
+                self.line_init()
+                self.line_more(sentinel)
+                arg.put(can_split=True)
+                if has_stars:
+                    pass
+                else:
+                    self.line_more(LIST_SEP)
                 self.line_term()
             self.line_init()
             self.dec_margin()
@@ -2408,14 +2548,13 @@ class NodeClass(Node):
         return lineno
 
 
-class NodeCompare(NodeOpr):
+class NodeCompare(NodeOprNotAssoc):
 
     """Logical comparison.
 
     """
 
     tag = 'Compare'
-    is_commutative = False
 
     def __init__(self, indent, lineno, expr, ops):
         Node.__init__(self, indent, lineno)
@@ -2427,9 +2566,9 @@ class NodeCompare(NodeOpr):
     def put(self, can_split=False):
         self.put_expr(self.expr, can_split=can_split)
         for (op, ex) in self.ops:
-            self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-            self.line_more(' %s ' % op)
-            ex.put(can_split=can_split)
+            self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+            self.line_more('%s ' % op)
+            self.put_expr(ex, can_split=can_split)
         return self
 
     def get_hi_lineno(self):
@@ -2466,7 +2605,7 @@ class NodeConst(Node):
         return isinstance(self.value, NodeStr)
 
     def get_as_repr(self):  # 2007 May 01
-        original_values = COMMENTS.literal_pool.get(self.value, [])
+        original_values = COMMENTS.literal_pool.get(repr(self.value), [])  # 2010 Mar 10
         if len(original_values) == 1:
             (result, lineno) = original_values[ZERO]
         else:
@@ -2582,7 +2721,7 @@ class NodeDiscard(Node):
         return 
 
     def put(self, can_split=False):
-        if isinstance(self.expr, NodeConst):  # 2007 May 01
+        if isinstance(self.expr, NodeConst) and (not KEEP_UNASSIGNED_CONSTANTS):  # 2010 Mar 10
             pass
         else:
             self.line_init()
@@ -2601,14 +2740,13 @@ class NodeDiscard(Node):
         return self.expr.get_hi_lineno()
 
 
-class NodeDiv(NodeOpr):
+class NodeDiv(NodeOprLeftAssoc):  # 2010 Mar 10
 
     """Division operation.
 
     """
 
     tag = 'Div'
-    is_commutative = False
 
     def __init__(self, indent, lineno, left, right):
         Node.__init__(self, indent, lineno)
@@ -2617,10 +2755,10 @@ class NodeDiv(NodeOpr):
         return 
 
     def put(self, can_split=False):
-        self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' / ')
-        self.put_expr(self.right, can_split=can_split)
+        self.put_expr(self.left, can_split=can_split, pos='left')  # 2010 Mar 10
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('/ ')
+        self.put_expr(self.right, can_split=can_split, pos='right')  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -2704,9 +2842,15 @@ class NodeFor(Node):
     def put(self, can_split=False):
         self.line_init()
         self.line_more('for ')
-        self.assign.put(can_split=can_split)
+        if isinstance(self.assign, NodeAsgTuple):
+            self.assign.put(can_split=can_split, is_paren_required=False)  # 2010 Mar 10
+        else:
+            self.assign.put(can_split=can_split)
         self.line_more(' in ', can_break_after=True)
-        self.list.put(can_split=can_split)
+        if isinstance(self.list, NodeTuple):
+            self.list.put(can_split=can_split, is_paren_required=False)  # 2010 Mar 10
+        else:
+            self.list.put(can_split=can_split)
         self.line_more(':')
         self.line_term(self.body.get_lineno() - 1)
         self.body.put()
@@ -2732,14 +2876,14 @@ class NodeFor(Node):
         return self.list.get_hi_lineno()
 
 
-class NodeFloorDiv(NodeOpr):
+class NodeFloorDiv(NodeOprLeftAssoc):  # 2010 Mar 10
 
     """Floor division operation.
 
     """
 
     tag = 'FloorDiv'
-    is_commutative = False
+
 
     def __init__(self, indent, lineno, left, right):
         Node.__init__(self, indent, lineno)
@@ -2748,10 +2892,10 @@ class NodeFloorDiv(NodeOpr):
         return 
 
     def put(self, can_split=False):
-        self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' // ')
-        self.put_expr(self.right, can_split=can_split)
+        self.put_expr(self.left, can_split=can_split, pos='left')  # 2010 Mar 10
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('// ')
+        self.put_expr(self.right, can_split=can_split, pos='right')  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -2861,7 +3005,7 @@ class NodeFunction(Node):
         return result
 
     def pair_up(self, args, defaults):
-        args = args[:]  # This function manipulates its arguments
+        args = args[:]          # This function manipulates its arguments
         defaults = defaults[:]  # destructively, so make copies first.
         stars = []
         args.reverse()
@@ -3256,7 +3400,7 @@ class NodeIf(Node):
 
 class NodeIfExp(Node):
 
-    """Conditional assignment.
+    """Conditional assignment.  (Ternary expression.)
 
     """
 
@@ -3270,11 +3414,13 @@ class NodeIfExp(Node):
         return 
 
     def put(self, can_split=False):
-        self.then.put(can_split=can_split)
+        self.line_more('(', tab_set=True)  # 2010 Mar 10
+        self.then.put(can_split=True)  # 2010 Mar 10
         self.line_more(' if ')
-        self.test.put(can_split=can_split)
+        self.test.put(can_split=True)  # 2010 Mar 10
         self.line_more(' else ')
-        self.else_.put()
+        self.else_.put(can_split=True)  # 2010 Mar 10
+        self.line_more(')', tab_clear=True)  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -3373,14 +3519,14 @@ class NodeKeyword(Node):
         return self.expr.get_hi_lineno()
 
 
-class NodeLeftShift(NodeOpr):
+class NodeLeftShift(NodeOprLeftAssoc):  # 2010 Mar 01
 
     """Bitwise shift left.
 
     """
 
     tag = 'LeftShift'
-    is_commutative = False
+
 
     def __init__(self, indent, lineno, left, right):
         Node.__init__(self, indent, lineno)
@@ -3389,10 +3535,10 @@ class NodeLeftShift(NodeOpr):
         return 
 
     def put(self, can_split=False):
-        self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' << ')
-        self.put_expr(self.right, can_split=can_split)
+        self.put_expr(self.left, can_split=can_split, pos='left')  # 2010 Mar 10
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('<< ')
+        self.put_expr(self.right, can_split=can_split, pos='right')  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -3542,14 +3688,13 @@ class NodeListCompIf(Node):
         return self.test.get_hi_lineno()
 
 
-class NodeMod(NodeOpr):
+class NodeMod(NodeOprLeftAssoc):  # 2010 Mar 10
 
     """Modulus (string formatting) operation.
 
     """
 
     tag = 'Mod'
-    is_commutative = False
 
     def __init__(self, indent, lineno, left, right):
         Node.__init__(self, indent, lineno)
@@ -3558,10 +3703,10 @@ class NodeMod(NodeOpr):
         return 
 
     def put(self, can_split=False):
-        self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' % ')
-        self.put_expr(self.right, can_split=can_split)
+        self.put_expr(self.left, can_split=can_split, pos='left')  # 2010 Mar 10
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('% ')
+        self.put_expr(self.right, can_split=can_split, pos='right')  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -3615,14 +3760,13 @@ class NodeModule(Node):
         return self.node.get_lineno()
 
 
-class NodeMul(NodeOpr):
+class NodeMul(NodeOprLeftAssoc):  # 2010 Mar 10
 
     """Multiply operation.
 
     """
 
     tag = 'Mul'
-    is_commutative = False  # ... string replication, that is.
 
     def __init__(self, indent, lineno, left, right):
         Node.__init__(self, indent, lineno)
@@ -3631,10 +3775,10 @@ class NodeMul(NodeOpr):
         return 
 
     def put(self, can_split=False):
-        self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' * ')
-        self.put_expr(self.right, can_split=can_split)
+        self.put_expr(self.left, can_split=can_split, pos='left')  # 2010 Mar 10
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('* ')
+        self.put_expr(self.right, can_split=can_split, pos='right')  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -3691,7 +3835,7 @@ class NodeNot(NodeOpr):
         return self.expr.get_hi_lineno()
 
 
-class NodeOr(NodeOpr):
+class NodeOr(NodeOprAssoc):  # 2010 Mar 10
 
     '''Logical "or" operation.
 
@@ -3708,8 +3852,8 @@ class NodeOr(NodeOpr):
         for node in (self.nodes)[:1]:
             self.put_expr(node, can_split=can_split)
         for node in (self.nodes)[1:]:
-            self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-            self.line_more(' or ')
+            self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+            self.line_more('or ')
             self.put_expr(node, can_split=can_split)
         return self
 
@@ -3736,14 +3880,13 @@ class NodePass(Node):
         return self
 
 
-class NodePower(NodeOpr):
+class NodePower(NodeOprRightAssoc):  # 2010 Mar 10
 
     """Exponentiation.
 
     """
 
     tag = 'Power'
-    is_commutative = False
 
     def __init__(self, indent, lineno, left, right):
         Node.__init__(self, indent, lineno)
@@ -3752,10 +3895,10 @@ class NodePower(NodeOpr):
         return 
 
     def put(self, can_split=False):
-        self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' ** ')
-        self.put_expr(self.right, can_split=can_split)
+        self.put_expr(self.left, can_split=can_split, pos='left')  # 2010 Mar 10
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('** ')
+        self.put_expr(self.right, can_split=can_split, pos='right')  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -3918,7 +4061,10 @@ class NodeReturn(Node):
         self.line_init()
         self.line_more('return ')
         if self.has_value():
-            self.value.put(can_split=can_split)
+            if isinstance(self.value, NodeTuple):
+                self.value.put(can_split=can_split, is_paren_required=False)  # 2010 Mar 10
+            else:
+                self.value.put(can_split=can_split)
         self.line_term()
         return self
 
@@ -3929,14 +4075,13 @@ class NodeReturn(Node):
         return lineno
 
 
-class NodeRightShift(NodeOpr):
+class NodeRightShift(NodeOprLeftAssoc):  # 2010 Mar 10
 
     """Bitwise shift right.
 
     """
 
     tag = 'RightShift'
-    is_commutative = False
 
     def __init__(self, indent, lineno, left, right):
         Node.__init__(self, indent, lineno)
@@ -3945,10 +4090,10 @@ class NodeRightShift(NodeOpr):
         return 
 
     def put(self, can_split=False):
-        self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' >> ')
-        self.put_expr(self.right, can_split=can_split)
+        self.put_expr(self.left, can_split=can_split, pos='left')  # 2010 Mar 10
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('>> ')
+        self.put_expr(self.right, can_split=can_split, pos='right')  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -4081,14 +4226,13 @@ class NodeStmt(Node):
         return self
 
 
-class NodeSub(NodeOpr):
+class NodeSub(NodeOprLeftAssoc):  # 2010 Mar 10
 
     """Subtract operation.
 
     """
 
     tag = 'Sub'
-    is_commutative = False
 
     def __init__(self, indent, lineno, left, right):
         Node.__init__(self, indent, lineno)
@@ -4097,10 +4241,10 @@ class NodeSub(NodeOpr):
         return 
 
     def put(self, can_split=False):
-        self.put_expr(self.left, can_split=can_split)
-        self.line_more(can_split_after=can_split, can_break_after=True)  # 2007 May 23
-        self.line_more(' - ')
-        self.put_expr(self.right, can_split=can_split)
+        self.put_expr(self.left, can_split=can_split, pos='left')  # 2010 Mar 10
+        self.line_more(SPACE, can_split_after=can_split, can_break_after=True)  # 2007 May 23
+        self.line_more('- ')
+        self.put_expr(self.right, can_split=can_split, pos='right')  # 2010 Mar 10
         return self
 
     def get_hi_lineno(self):
@@ -4269,9 +4413,9 @@ class NodeTuple(Node):
         self.nodes = [transform(indent, lineno, node) for node in nodes]
         return 
 
-    def put(self, can_split=False):
-        self.line_more('(', tab_set=True)
+    def put(self, can_split=False, is_paren_required=True):  # 2010 Mar 10
         if len(self.nodes) > MAX_SEPS_SERIES:  # 2007 May 24
+            self.line_more('(', tab_set=True)  # 2010 Mar 10
             self.line_term()
             self.inc_margin()
             for node in self.nodes:
@@ -4281,7 +4425,11 @@ class NodeTuple(Node):
                 self.line_term()
             self.line_init()
             self.dec_margin()
-        else:
+            self.line_more(')', tab_clear=True)  # 2010 Mar 10
+        elif ((len(self.nodes) == ZERO) or
+              is_paren_required or
+              PARENTHESIZE_TUPLE_DISPLAY):  # 2010 Mar 10
+            self.line_more('(', tab_set=True)  # 2010 Mar 10
             for node in (self.nodes)[:1]:
                 node.put(can_split=True)
                 self.line_more(LIST_SEP, can_split_after=True)
@@ -4290,7 +4438,16 @@ class NodeTuple(Node):
             for node in (self.nodes)[2:]:
                 self.line_more(LIST_SEP, can_split_after=True)
                 node.put(can_split=True)
-        self.line_more(')', tab_clear=True)
+            self.line_more(')', tab_clear=True)  # 2010 Mar 10
+        else:
+            for node in (self.nodes)[:1]:
+                node.put()
+                self.line_more(LIST_SEP, can_break_after=True)  # 2010 Mar 10
+            for node in (self.nodes)[1:2]:
+                node.put()
+            for node in (self.nodes)[2:]:
+                self.line_more(LIST_SEP, can_break_after=True)  # 2010 Mar 10
+                node.put()
         return self
 
     def get_hi_lineno(self):
@@ -4475,8 +4632,7 @@ OPERATOR_PRECEDENCE = [
     (NodeLeftShift, NodeRightShift), 
     (NodeAdd, NodeSub), 
     (NodeMul, NodeDiv, NodeFloorDiv, NodeMod), 
-    (NodeUnaryAdd, NodeUnarySub), 
-    (NodeInvert, ), 
+    (NodeUnaryAdd, NodeUnarySub, NodeInvert, ),  # 2010 Mar 10
     (NodePower, ), 
     (NodeAsgAttr, NodeGetAttr), 
     (NodeSubscript, ), 
