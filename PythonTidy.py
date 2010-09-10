@@ -120,8 +120,24 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.20'  # 2010 Mar 10
+VERSION = '1.21'  # 2010 Sep 03
 
+# 2010 Sep 08 . v1.21 . ccr . For Nikolai Prokoschenko:
+#
+# o When double spacing is prescribed by PEP 8, do it before
+# leading comments.
+#
+# o Per Pep 8, double space around top-level classes only.
+#
+# o Don't split index values from keys before colon.
+#
+# o Preserve spelling of words in long strings containing special
+# characters.
+#
+# o Optionally, bring closing brackets, braces, and parens of split
+# series back left to the margin of the enclosing statement.  See
+# JAVA_STYLE_LIST_DEDENT.
+#
 # 2010 Mar 10 . v1.20 . ccr . For Kuang-che Wu:
 #
 # o Optionally preserve unassigned constants so that code to be tidied
@@ -314,11 +330,12 @@ WRAP_DOC_STRINGS = False  # 2007 May 25
 DOUBLE_QUOTED_STRINGS = False  # 2006 Dec 05
 SINGLE_QUOTED_STRINGS = False  # 2007 May 01
 RECODE_STRINGS = False  # 2006 Dec 01
-OVERRIDE_NEWLINE = '\n'  # 2006 Dec 05
+OVERRIDE_NEWLINE = ''  # 2006 Dec 05
 CAN_SPLIT_STRINGS = False  # 2007 Mar 06
 DOC_TAB_REPLACEMENT = '....'  # 2007 May 24
 KEEP_UNASSIGNED_CONSTANTS = False  # 2010 Mar 10
 PARENTHESIZE_TUPLE_DISPLAY = True  # 2010 Mar 10
+JAVA_STYLE_LIST_DEDENT = False  # 2010 Sep 08
 
 # Repertoire of name-transformation functions:
 
@@ -1098,9 +1115,78 @@ class Comments(dict):
                 tab_count = margin.count('\t')
                 scol += (len(INDENTATION) - 1) * tab_count
             return scol
+
+        def merge_concatenated_strings(lines):  # 2010 Sep 08
+
+            """Save whole string in literal pool.
+
+            Python (and the *compiler* module) treat adjacent strings
+            without an intervening operator as one string.  The
+            *tokenize* module does not.  Thus, although the parts are
+            easily saved in PythonTidy's literal pool, the whole
+            string is not.  This routine makes a full pass through the
+            tokens and accumulates adjacent strings so that the whole
+            string is saved in the literal pool along with its
+            original spelling.
+
+            This preserves the original spelling of words even in
+            especially long phrases that would otherwise be normalized
+            with escape sequences for embedded \"special\" characters.
+
+            The original spelling is stored in the literal pool,
+            indexed by the normalized version.  If a lookup of the
+            normalized version succeeds, the original spelling is
+            output; otherwise, the normalized version is used instead.
+
+            """
+            try:
+                while True:
+                    prev_item = lines.next()
+                    yield prev_item
+                    (
+                        prev_token_type,
+                        prev_token_string,
+                        prev_start,
+                        prev_end,
+                        prev_line,
+                        ) = prev_item
+                    if prev_token_type in [tokenize.STRING]:
+                        on1 = True
+                        while True:
+                            next_item  = lines.next()
+                            yield next_item
+                            (
+                                next_token_type,
+                                next_token_string,
+                                next_start,
+                                next_end,
+                                next_line,
+                                ) = next_item
+                            if next_token_type in [tokenize.STRING]:
+                                if prev_token_string[-1] == next_token_string[ZERO]:
+                                    prev_token_string = prev_token_string[:-1] + \
+                                                        next_token_string[1:]
+                                    on1 = False
+                            else:
+                                if on1:
+                                    pass
+                                else:
+                                    prev_item = (
+                                        prev_token_type,
+                                        prev_token_string,
+                                        prev_start,
+                                        prev_end,
+                                        prev_line,
+                                        )
+                                    yield prev_item
+                                    break
+            except NotImplementedError:
+                pass
+            return
         
         self.literal_pool = {}  # 2007 Jan 14
         lines = tokenize.generate_tokens(INPUT.readline)
+        lines = merge_concatenated_strings(lines)  # 2010 Sep 08
         for (token_type, token_string, start, end, line) in lines:
             if DEBUG:
                 print (token.tok_name)[token_type], token_string, start, \
@@ -1226,7 +1312,7 @@ class Comments(dict):
                 if is_first_blank:
                     text.insert(ZERO, [NA, NULL])
                 if is_last_blank:
-                    text.append([NA, NULL]) 
+                    text.append([NA, NULL])
         for (scol, line) in text:  # 2007 May 25
             if scol == NA:
                 OUTPUT.put_blank_line(2)
@@ -1633,6 +1719,9 @@ class Node(object):
         return 
 
     def line_init(self, need_blank_line=ZERO):
+        if COMMENTS.prev_lineno > ZERO:  # 2010 Sep 08
+            OUTPUT.put_blank_line(41, count=need_blank_line)  # 2010 Sep 08
+            need_blank_line -= 1  # 2010 Sep 08
         COMMENTS.merge(self.get_lineno())
         OUTPUT.put_blank_line(4, count=need_blank_line)
         OUTPUT.line_init(self.indent, self.get_lineno())
@@ -2021,8 +2110,12 @@ class NodeAsgList(Node):
                 node.put(can_split=True)
                 self.line_more(LIST_SEP)
                 self.line_term()
-            self.line_init()
-            self.dec_margin()
+            if JAVA_STYLE_LIST_DEDENT:  # 2010 Sep 08
+                self.dec_margin()
+                self.line_init()
+            else:
+                self.line_init()
+                self.dec_margin()
         else:
             for node in (self.nodes)[:1]:
                 node.put(can_split=True)
@@ -2106,8 +2199,12 @@ class NodeAsgTuple(Node):
                 node.put(can_split=True)
                 self.line_more(LIST_SEP)
                 self.line_term()
-            self.line_init()
-            self.dec_margin()
+            if JAVA_STYLE_LIST_DEDENT:  # 2010 Sep 08
+                self.dec_margin()
+                self.line_init()
+            else:
+                self.line_init()
+                self.dec_margin()
             self.line_more(')', tab_clear=True)  # 2010 Mar 10
         elif is_paren_required or PARENTHESIZE_TUPLE_DISPLAY:  # 2010 Mar 10
             self.line_more('(', tab_set=True)  # 2010 Mar 10
@@ -2440,8 +2537,12 @@ class NodeCallFunc(Node):
                 else:
                     self.line_more(LIST_SEP)
                 self.line_term()
-            self.line_init()
-            self.dec_margin()
+            if JAVA_STYLE_LIST_DEDENT:  # 2010 Sep 08
+                self.dec_margin()
+                self.line_init()
+            else:
+                self.line_init()
+                self.dec_margin()
         else:
             for arg in (self.args)[:-1]:
                 arg.put(can_split=True)
@@ -2504,7 +2605,11 @@ class NodeClass(Node):
         return 
 
     def put(self, can_split=False):
-        self.line_init(need_blank_line=2)
+        if NAME_SPACE.is_global():  # 2010 Sep 08
+            spacing = 2
+        else:
+            spacing = 1
+        self.line_init(need_blank_line=spacing)
         self.line_more('class ')
         self.line_more(NAME_SPACE.get_name(self.name))
         if self.bases:
@@ -2526,7 +2631,7 @@ class NodeClass(Node):
         self.code.marshal_names()
         self.code.put()
         self.pop_scope()
-        OUTPUT.put_blank_line(7, count=2)
+        OUTPUT.put_blank_line(7, count=spacing)
         return self
 
     def push_scope(self):
@@ -2674,7 +2779,7 @@ class NodeDict(Node):
     def put(self, can_split=False):
 
         def put_item():
-            key.put(can_split=can_split)
+            key.put(can_split=False)  # 2010 Sep 08
             self.line_more(DICT_COLON)
             value.put(can_split=can_split)
             return 
@@ -2688,8 +2793,12 @@ class NodeDict(Node):
                 put_item()
                 self.line_more(LIST_SEP)
                 self.line_term()
-            self.line_init()
-            self.dec_margin()
+            if JAVA_STYLE_LIST_DEDENT:  # 2010 Sep 08
+                self.dec_margin()
+                self.line_init()
+            else:
+                self.line_init()
+                self.dec_margin()
         else:
             for (key, value) in (self.items)[:1]:
                 put_item()
@@ -3076,8 +3185,12 @@ class NodeFunction(Node):
                 if stars is None:  # 2006 Dec 17
                     self.line_more(FUNCTION_PARAM_SEP)
                 self.line_term()
-            self.line_init()
-            self.dec_margin()
+            if JAVA_STYLE_LIST_DEDENT:  # 2010 Sep 08
+                self.dec_margin()
+                self.line_init()
+            else:
+                self.line_init()
+                self.dec_margin()
         else:
             for (arg, default, stars) in parms[:1]:
                 self.put_parm(arg, default, stars)
@@ -3568,8 +3681,12 @@ class NodeList(Node):
                 node.put(can_split=True)
                 self.line_more(LIST_SEP)
                 self.line_term()
-            self.line_init()
-            self.dec_margin()
+            if JAVA_STYLE_LIST_DEDENT:  # 2010 Sep 08
+                self.dec_margin()
+                self.line_init()
+            else:
+                self.line_init()
+                self.dec_margin()
         else:
             for node in (self.nodes)[:1]:
                 node.put(can_split=True)
@@ -4423,8 +4540,12 @@ class NodeTuple(Node):
                 node.put(can_split=True)
                 self.line_more(LIST_SEP)
                 self.line_term()
-            self.line_init()
-            self.dec_margin()
+            if JAVA_STYLE_LIST_DEDENT:  # 2010 Sep 08
+                self.dec_margin()
+                self.line_init()
+            else:
+                self.line_init()
+                self.dec_margin()
             self.line_more(')', tab_clear=True)  # 2010 Mar 10
         elif ((len(self.nodes) == ZERO) or
               is_paren_required or
