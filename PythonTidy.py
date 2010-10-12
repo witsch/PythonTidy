@@ -809,9 +809,16 @@ class InputUnit(object):
             unit = open(os.path.expanduser(file_in), 'rb')
             buffer = unit.read()  # 2006 Dec 05
             unit.close()
+
         self.lines = UNIVERSAL_NEW_LINE_PATTERN.split(buffer)  # 2006 Dec 05
+
+        # self.lines will be a list of lines and terminators because
+        # UNIVERSAL_NEW_LINE_PATTERN captures the actual newline.
+
+        # If we have more than one line we'll follow the original newline
+        # usage unless OVERRIDE_NEWLINE is set:
         if len(self.lines) > 2:
-            if OVERRIDE_NEWLINE is None:
+            if not OVERRIDE_NEWLINE:
                 self.newline = self.lines[1]  # ... the first delimiter.
             else:
                 self.newline = OVERRIDE_NEWLINE
@@ -819,6 +826,7 @@ class InputUnit(object):
         else:
             self.newline = '\n'
             look_ahead = NULL
+
         match = CODING_PATTERN.search(look_ahead)
         if match is None:
             self.coding = 'ascii'
