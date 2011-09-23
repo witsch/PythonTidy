@@ -4805,7 +4805,8 @@ def tidy_up(file_in=sys.stdin, file_out=sys.stdout):  # 2007 Jan 22
     OUTPUT.close()
     return
 
-if __name__ == "__main__":  # 2007 Jan 22
+
+def main():                 # 2007 Jan 22
     if DEBUG:
         print 'Begin doctests.'
         doctest.testmod()
@@ -4823,5 +4824,9 @@ if __name__ == "__main__":  # 2007 Jan 22
     if file_out in ['-']:
         file_out = sys.stdout
     tidy_up(file_in, file_out)
+
+
+if __name__ == "__main__":
+    main()
 
 # Fin
