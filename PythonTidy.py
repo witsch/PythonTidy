@@ -319,6 +319,7 @@ BOILERPLATE = NULL  # 2007 Mar 06
 BLANK_LINE = NULL
 KEEP_BLANK_LINES = True
 ADD_BLANK_LINES_AROUND_COMMENTS = True
+ADD_BLANK_LINE_AFTER_DOC_STRING = True
 MAX_SEPS_FUNC_DEF = 3  # 2007 May 24
 MAX_SEPS_FUNC_REF = 5  # 2007 May 24
 MAX_SEPS_SERIES = 5  # 2007 May 24
@@ -1940,7 +1941,8 @@ class NodeStr(Node):
         doc = fix_newlines(doc)  # 2010 Mar 10
         self.put_multi_line(doc)
         self.line_term()
-        OUTPUT.put_blank_line(5)
+        if ADD_BLANK_LINE_AFTER_DOC_STRING:
+            OUTPUT.put_blank_line(5)
         return self
 
     def put_lit(self, can_split=False):
