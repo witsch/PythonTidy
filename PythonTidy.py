@@ -903,7 +903,7 @@ class OutputUnit(object):
         return
 
     def close(self):  # 2006 Dec 01
-        self.unit.write(self.buffer)  # 2007 Jan 22
+        self.unit.write(self.buffer.rstrip(self.newline))  # 2007 Jan 22
         if self.is_file_like:
             pass
         else:
@@ -1053,9 +1053,10 @@ class OutputUnit(object):
         self.lineno += text.count(self.newline)
         self.buffer += text  # 2007 Jan 22
         if self.buffer.endswith('\n') or self.buffer.endswith('\r'):  # 2008 Jan 30
-            self.unit.write(self.buffer.rstrip())
-            self.unit.write(self.newline)  # 2008 Jan 30
-            self.buffer = NULL
+            if self.buffer.rstrip(self.newline):
+                self.unit.write(self.buffer.rstrip())
+                self.unit.write(self.newline)  # 2008 Jan 30
+                self.buffer = NULL
         return self
 
     def put_blank_line(self, trace, count=1):
