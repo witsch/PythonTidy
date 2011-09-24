@@ -220,6 +220,8 @@ This is inserted after the module doc string on output."""),
              , 'int'),
             ('LEFT_MARGIN', 'This is how the left margin is to appear.'
              ),
+            ('NORMALIZE_DOC_STRINGS',
+             'If true, normalize white space in doc strings.', 'bool'),
             ('LEFTJUST_DOC_STRINGS',
              'If true, left justify doc strings.', 'bool'),
             ('WRAP_DOC_STRINGS',

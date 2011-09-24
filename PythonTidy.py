@@ -326,6 +326,7 @@ MAX_SEPS_SERIES = 5  # 2007 May 24
 MAX_SEPS_DICT = 3  # 2007 May 24
 MAX_LINES_BEFORE_SPLIT_LIT = 2
 LEFT_MARGIN = NULL
+NORMALIZE_DOC_STRINGS = False
 LEFTJUST_DOC_STRINGS = False
 WRAP_DOC_STRINGS = False  # 2007 May 25
 DOUBLE_QUOTED_STRINGS = False  # 2006 Dec 05
@@ -1926,14 +1927,18 @@ class NodeStr(Node):
 
         doc = self.get_as_repr()  # 2010 Mar 10
         doc = doc.replace('\t', DOC_TAB_REPLACEMENT)  # 2007 May 24
+        indent = self.indent
+        if NORMALIZE_DOC_STRINGS:
+            doc = '""" %s """' % doc.strip("'\"").strip()
+            indent += 1
         if LEFTJUST_DOC_STRINGS:
             lines = leftjust_lines(doc.strip().splitlines())  # 2007 May 25
             lines.extend([NULL, NULL])
-            margin = '%s%s' % (OUTPUT.newline, INDENTATION * self.indent)  # 2006 Dec 05
+            margin = '%s%s' % (OUTPUT.newline, INDENTATION * indent)  # 2006 Dec 05
             doc = margin.join(lines)
         if WRAP_DOC_STRINGS:  # 2007 May 25
-            margin = '%s%s' % (OUTPUT.newline, INDENTATION * self.indent)  # 2006 Dec 05
-            line_length = COL_LIMIT - (len(INDENTATION) * self.indent)
+            margin = '%s%s' % (OUTPUT.newline, INDENTATION * indent)  # 2006 Dec 05
+            line_length = COL_LIMIT - (len(INDENTATION) * indent)
             line_length = max(line_length, 20)
             lines = wrap_lines(doc.strip().splitlines(), width=line_length)
             lines.extend([NULL, NULL])
