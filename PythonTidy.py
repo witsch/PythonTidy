@@ -1139,49 +1139,46 @@ class Comments(dict):
             output; otherwise, the normalized version is used instead.
 
             """
-            try:
-                while True:
-                    prev_item = lines.next()
-                    yield prev_item
-                    (
-                        prev_token_type,
-                        prev_token_string,
-                        prev_start,
-                        prev_end,
-                        prev_line,
-                        ) = prev_item
-                    if prev_token_type in [tokenize.STRING]:
-                        on1 = True
-                        while True:
-                            next_item  = lines.next()
-                            yield next_item
-                            (
-                                next_token_type,
-                                next_token_string,
-                                next_start,
-                                next_end,
-                                next_line,
-                                ) = next_item
-                            if next_token_type in [tokenize.STRING]:
-                                if prev_token_string[-1] == next_token_string[ZERO]:
-                                    prev_token_string = prev_token_string[:-1] + \
-                                                        next_token_string[1:]
-                                    on1 = False
+            while True:
+                prev_item = lines.next()
+                yield prev_item
+                (
+                    prev_token_type,
+                    prev_token_string,
+                    prev_start,
+                    prev_end,
+                    prev_line,
+                    ) = prev_item
+                if prev_token_type in [tokenize.STRING]:
+                    on1 = True
+                    while True:
+                        next_item  = lines.next()
+                        yield next_item
+                        (
+                            next_token_type,
+                            next_token_string,
+                            next_start,
+                            next_end,
+                            next_line,
+                            ) = next_item
+                        if next_token_type in [tokenize.STRING]:
+                            if prev_token_string[-1] == next_token_string[ZERO]:
+                                prev_token_string = prev_token_string[:-1] + \
+                                                    next_token_string[1:]
+                                on1 = False
+                        else:
+                            if on1:
+                                pass
                             else:
-                                if on1:
-                                    pass
-                                else:
-                                    prev_item = (
-                                        prev_token_type,
-                                        prev_token_string,
-                                        prev_start,
-                                        prev_end,
-                                        prev_line,
-                                        )
-                                    yield prev_item
-                                    break
-            except NotImplementedError:
-                pass
+                                prev_item = (
+                                    prev_token_type,
+                                    prev_token_string,
+                                    prev_start,
+                                    prev_end,
+                                    prev_line,
+                                    )
+                                yield prev_item
+                                break
             return
         
         self.literal_pool = {}  # 2007 Jan 14
