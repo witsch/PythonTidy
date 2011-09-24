@@ -404,42 +404,47 @@ on output to filter class-attribute names."""
         return self
 
 
-PARSER = optparse.OptionParser(usage='%prog [options] [input [output]]'
-                               , description=__doc__)
-PARSER.add_option('-u', '--ini_file',
-                  help='''Read configuration parameters from an ini_file.'''
-                  , default=None)
-PARSER.add_option('-U', '--dump',
-                  help='''Dump default PythonTidy configuration parameters out to a file.'''
-                  , default=None)
-(OPTS, ARGS) = PARSER.parse_args()
-if len(ARGS) > 2:
-    PARSER.error('At most, only two arguments are allowed.')
-if len(ARGS) > 1:
-    FILE_OUTPUT = ARGS[1]
-else:
-    FILE_OUTPUT = '-'
-if FILE_OUTPUT in ['-']:
-    FILE_OUTPUT = sys.stdout
-if len(ARGS) > ZERO:
-    FILE_INPUT = ARGS[ZERO]
-else:
-    FILE_INPUT = '-'
-if FILE_INPUT in ['-']:
-    FILE_INPUT = sys.stdin
-if OPTS.dump is None:
-    pass
-else:
-    CONFIG = Config()
-    CONFIG.from_pythontidy_namespace()
-    CONFIG.write(file=OPTS.dump)
-    sys.exit('Dump complete!')
-if OPTS.ini_file is None:
-    pass
-else:
-    CONFIG = Config(file=OPTS.ini_file)
-    CONFIG.to_pythontidy_namespace()
-    del CONFIG
-PythonTidy.tidy_up(FILE_INPUT, FILE_OUTPUT)
+def main():
+    PARSER = optparse.OptionParser(usage='%prog [options] [input [output]]'
+                                   , description=__doc__)
+    PARSER.add_option('-u', '--ini_file',
+                      help='''Read configuration parameters from an ini_file.'''
+                      , default=None)
+    PARSER.add_option('-U', '--dump',
+                      help='''Dump default PythonTidy configuration parameters out to a file.'''
+                      , default=None)
+    (OPTS, ARGS) = PARSER.parse_args()
+    if len(ARGS) > 2:
+        PARSER.error('At most, only two arguments are allowed.')
+    if len(ARGS) > 1:
+        FILE_OUTPUT = ARGS[1]
+    else:
+        FILE_OUTPUT = '-'
+    if FILE_OUTPUT in ['-']:
+        FILE_OUTPUT = sys.stdout
+    if len(ARGS) > ZERO:
+        FILE_INPUT = ARGS[ZERO]
+    else:
+        FILE_INPUT = '-'
+    if FILE_INPUT in ['-']:
+        FILE_INPUT = sys.stdin
+    if OPTS.dump is None:
+        pass
+    else:
+        CONFIG = Config()
+        CONFIG.from_pythontidy_namespace()
+        CONFIG.write(file=OPTS.dump)
+        sys.exit('Dump complete!')
+    if OPTS.ini_file is None:
+        pass
+    else:
+        CONFIG = Config(file=OPTS.ini_file)
+        CONFIG.to_pythontidy_namespace()
+        del CONFIG
+    PythonTidy.tidy_up(FILE_INPUT, FILE_OUTPUT)
+
+
+if __name__ == "__main__":
+    main()
 
 # Fin
