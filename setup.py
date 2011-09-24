@@ -1,7 +1,14 @@
 from setuptools import setup
-from PythonTidy import VERSION as version
+from config import version, summary
 
-summary = 'Cleans up, regularizes, and reformats the text of Python scripts.'
+
+install_requires = ['setuptools']
+try:
+    import argparse
+    argparse    # make pyflakes happy
+except ImportError:
+    install_requires.append('argparse')
+
 
 setup(name='PythonTidy',
       version=version,
@@ -21,12 +28,10 @@ setup(name='PythonTidy',
       author_email='CRhode@LacusVeris.com',
       url='http://pypi.python.org/pypi/PythonTidy',
       license='GPL version 2',
-      py_modules=['PythonTidy'],
+      py_modules=['PythonTidy', 'PythonTidyWrapper', 'config', 'runner'],
       platforms='Any',
-      install_requires=[
-          'setuptools',
-      ],
+      install_requires=install_requires,
       entry_points={
-          'console_scripts': ['pythontidy = PythonTidy:main'],
+          'console_scripts': ['pythontidy = runner:main'],
       },
 )
