@@ -329,6 +329,8 @@ LEFT_MARGIN = NULL
 NORMALIZE_DOC_STRINGS = False
 LEFTJUST_DOC_STRINGS = False
 WRAP_DOC_STRINGS = False  # 2007 May 25
+LEFTJUST_COMMENTS = False
+WRAP_COMMENTS = False
 DOUBLE_QUOTED_STRINGS = False  # 2006 Dec 05
 SINGLE_QUOTED_STRINGS = False  # 2007 May 01
 RECODE_STRINGS = False  # 2006 Dec 01
@@ -1298,7 +1300,7 @@ class Comments(dict):
                         text.append([scol, token_string])  # 2007 May 25
                 on1 = False
             self.prev_lineno += 1
-        if text and LEFTJUST_DOC_STRINGS:  # 2007 May 25
+        if text and LEFTJUST_COMMENTS:  # 2007 May 25
             (first, last, is_first_blank, is_last_blank) = strip_blank_lines(text)
             lines = [line for (scol, line) in text[first: last]]
             lines = leftjust_lines(lines)
@@ -1307,7 +1309,7 @@ class Comments(dict):
                 text.insert(ZERO, [NA, NULL])
             if is_last_blank:
                 text.append([NA, NULL])
-        if text and WRAP_DOC_STRINGS:  # 2007 May 25
+        if text and WRAP_COMMENTS:  # 2007 May 25
             (first, last, is_first_blank, is_last_blank) = strip_blank_lines(text)
             text = text[first: last]
             if text:
