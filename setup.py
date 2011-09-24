@@ -1,6 +1,6 @@
 from setuptools import setup
+from PythonTidy import VERSION as version
 
-version = '1.21'
 summary = 'Cleans up, regularizes, and reformats the text of Python scripts.'
 
 setup(name='PythonTidy',
